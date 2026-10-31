@@ -1,0 +1,25 @@
+{
+  "name": "uday-travels",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --root packages/shared",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-uday-travels \"vitest run --root tests/rules\"",
+    "emulators": "firebase emulators:start --project demo-uday-travels",
+    "seed": "tsx scripts/seed.ts",
+    "seed:demo": "tsx scripts/seed.ts --demo-trips"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@types/node": "^26.6.6",
+    "firebase": "^13.1.0",
+    "firebase-admin": "^14.5.0",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "default": "uday-travels-dev",
+    "dev": "uday-travels-dev",
+    "prod": "uday-travels-prod"
+  }
+}

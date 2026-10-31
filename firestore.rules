@@ -1,0 +1,59 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Admin = a document exists at admins/{uid}. Created by hand in the console; no client can write it.
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function validProfile(d) {
+      return d.keys().hasAll(['name', 'mobile', 'createdAt'])
+        && d.keys().hasOnly(['name', 'mobile', 'email', 'createdAt'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 60
+        && d.mobile is string && d.mobile.matches('^[6-9][0-9]{9}$')
+        && (!('email' in d) || d.email == null || (d.email is string && d.email.size() <= 100))
+        && d.createdAt is timestamp;
+    }
+
+    // Public timetable data
+    match /routes/{routeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /trips/{tripId} {
+      allow read: if true;
+      allow write: if isAdmin();   // seatsLeft moves to server-only writes in Task 3
+    }
+
+    // Internal bus records (registration numbers etc.): admin only. Passengers use fields copied onto trips.
+    match /buses/{busId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create: if signedIn() && request.auth.uid == uid
+        && validProfile(request.resource.data)
+        && request.resource.data.createdAt == request.time;
+      allow update: if signedIn() && request.auth.uid == uid
+        && validProfile(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.mobile == resource.data.mobile;
+      allow delete: if false;
+    }
+
+    // Everything else (bookings, holds, payments, refunds) is denied until Task 3 adds server code.
+  }
+}
