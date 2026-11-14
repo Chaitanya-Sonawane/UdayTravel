@@ -16,9 +16,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Bus seats collection: authenticated read allowed for seat selection; writes denied
+    // Bus seats collection: authoritative server-only
     match /bus_seats/{document=**} {
-      allow read: if request.auth != null;
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Seat public collection: client-readable sanitized seat map; writes denied
+    match /seat_public/{document=**} {
+      allow read: if request.auth != null || true;
       allow write: if false;
     }
 

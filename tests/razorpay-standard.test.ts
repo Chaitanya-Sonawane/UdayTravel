@@ -39,16 +39,38 @@ describe('Razorpay Standard Web Checkout API Endpoints', () => {
     })
 
     it('creates order without throwing undefined status error', async () => {
-      const req = new Request('http://localhost:3000/api/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: 20000, currency: 'INR', receipt: 'test_rcpt_1' }),
+      const originalFetch = globalThis.fetch
+      globalThis.fetch = vi.fn().mockImplementation((url, opts) => {
+        if (typeof url === 'string' && url.includes('api.razorpay.com/v1/orders')) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                id: 'order_test_mock_123',
+                amount: 20000,
+                currency: 'INR',
+                status: 'created',
+              }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            )
+          )
+        }
+        return originalFetch(url, opts)
       })
-      const res = await createOrderHandler(req)
-      expect(res.status).toBe(200)
-      const data = await res.json()
-      expect(data.order_id).toBeDefined()
-      expect(data.amount).toBe(20000)
+
+      try {
+        const req = new Request('http://localhost:3000/api/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ amount: 20000, currency: 'INR', receipt: 'test_rcpt_1' }),
+        })
+        const res = await createOrderHandler(req)
+        expect(res.status).toBe(200)
+        const data = await res.json()
+        expect(data.order_id).toBeDefined()
+        expect(data.amount).toBe(20000)
+      } finally {
+        globalThis.fetch = originalFetch
+      }
     })
   })
 

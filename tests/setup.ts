@@ -1,3 +1,6 @@
+process.env.HOLD_SIGNING_SECRET =
+  process.env.HOLD_SIGNING_SECRET || 'uday_hold_signing_secret_test_2026'
+
 // Node 20 compatibility polyfill for Map.groupBy and Object.groupBy
 if (!(Map as any).groupBy) {
   (Map as any).groupBy = function <K, T>(items: Iterable<T>, callback: (item: T, index: number) => K): Map<K, T[]> {

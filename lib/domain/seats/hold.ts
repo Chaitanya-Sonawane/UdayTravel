@@ -7,12 +7,11 @@ import { BASE_FARE_INR, HOLD_TTL_MS, SEATS_PER_BUS } from '../../config/rules'
 import { rupeesToPaise, computeBookingTotal } from '../../money'
 
 function getHoldSecret(): string {
-  return (
-    process.env.HOLD_SIGNING_SECRET ||
-    process.env.QR_SECRET ||
-    process.env.ADMIN_SECRET_KEY ||
-    'uday_hold_signing_secret_fallback_2026'
-  )
+  const secret = process.env.HOLD_SIGNING_SECRET
+  if (!secret) {
+    throw new Error('HOLD_SIGNING_SECRET environment variable is missing')
+  }
+  return secret
 }
 
 export function signHoldToken(
@@ -49,7 +48,11 @@ export interface PlaceSeatHoldParams {
   routeId: RouteId
   date: string
   tripId: string
-  seatIds: string[]
+  seatIds?: string[]
+  family?: boolean
+  acceptAdjacent?: boolean
+  deviceId?: string
+  passengers?: Array<{ seatId: string; gender: 'F' | 'M'; age: number }>
 }
 
 export interface PlaceSeatHoldResult {
@@ -60,10 +63,15 @@ export interface PlaceSeatHoldResult {
   perSeatPaise: number
   totalPaise: number
   busName: string
+  freshPublicMap?: any
 }
 
 export async function placeSeatHold(params: PlaceSeatHoldParams): Promise<PlaceSeatHoldResult> {
-  const { uid, routeId, date, tripId, seatIds } = params
+  const { uid, routeId, date, tripId, family, acceptAdjacent, deviceId } = params
+
+  const seatIds =
+    params.seatIds ||
+    (params.passengers ? params.passengers.map((p) => p.seatId) : [])
 
   if (!seatIds || seatIds.length === 0 || seatIds.length > 6) {
     throw new AppError(
@@ -100,8 +108,21 @@ export async function placeSeatHold(params: PlaceSeatHoldParams): Promise<PlaceS
   const grp = `hold_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
   const holdExpiresAt = Date.now() + (HOLD_TTL_MS || 300000)
 
-  // Place atomic hold in bus_seats repository
-  await SeatsRepository.placeHold(tripId, date, seatIds, uid, grp, holdExpiresAt)
+  // Place atomic hold in bus_seats repository with gender rule evaluation
+  const holdResult = await SeatsRepository.placeHold(
+    tripId,
+    date,
+    seatIds,
+    uid,
+    grp,
+    holdExpiresAt,
+    {
+      passengers: params.passengers,
+      family,
+      acceptAdjacent,
+      deviceId,
+    }
+  )
 
   const holdToken = signHoldToken(grp, uid, seatIds, holdExpiresAt)
 
@@ -113,5 +134,6 @@ export async function placeSeatHold(params: PlaceSeatHoldParams): Promise<PlaceS
     perSeatPaise,
     totalPaise,
     busName,
+    freshPublicMap: holdResult?.freshPublicMap,
   }
 }

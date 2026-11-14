@@ -4,11 +4,9 @@ import { getAdminDb } from '@/lib/firebase/admin'
 import { firestoreMeter } from '@/lib/firebase/meter'
 import { getRoute, RouteId } from '@/lib/config/routes'
 import { BASE_FARE_INR, SEATS_PER_BUS } from '@/lib/config/rules'
-import {
-  AvailabilityDoc,
-  generateDefaultSeatsMap,
-  SeatState,
-} from '@/lib/schema/availability'
+import { SeatsRepository } from '@/lib/data/seats.repo'
+import { AvailabilityDoc } from '@/lib/schema/availability'
+import { ALL_SEAT_IDS } from '@/lib/domain/seats/rules'
 
 export async function GET(req: Request) {
   const auth = await requireUser(req)
@@ -64,18 +62,31 @@ export async function GET(req: Request) {
   }
 
   const totalSeats = tripData.totalSeats || SEATS_PER_BUS
-  let seats: Record<string, SeatState>
 
-  if (tripData.seats && Object.keys(tripData.seats).length > 0) {
-    seats = tripData.seats
-  } else if (typeof tripData.booked === 'number') {
-    seats = generateDefaultSeatsMap(tripData.booked)
-  } else {
-    seats = generateDefaultSeatsMap(0)
+  // Read authoritative public map from seat_public ONLY
+  const publicMap = await SeatsRepository.getSeatPublic(tripId, date)
+
+  const takenCount = Object.keys(publicMap.taken || {}).length
+  const heldCount = Object.keys(publicMap.held || {}).length
+  const blockedCount = (publicMap.blocked || []).length
+  const totalOccupied = takenCount + heldCount + blockedCount
+  const seatsLeft = Math.max(0, totalSeats - totalOccupied)
+
+  // Provide mapped seats record for backward-compatibility with older tests & consumers
+  const seats: Record<string, string> = {}
+  for (const sId of ALL_SEAT_IDS) {
+    if (publicMap.taken?.[sId]) {
+      seats[sId] = publicMap.taken[sId] === 'F' ? 'female' : 'male'
+    } else if (publicMap.held?.[sId]) {
+      seats[sId] = 'held'
+    } else if (publicMap.blocked?.includes(sId)) {
+      seats[sId] = 'blocked'
+    } else if (tripData.seats?.[sId]) {
+      seats[sId] = tripData.seats[sId]
+    } else {
+      seats[sId] = 'available'
+    }
   }
-
-  const booked = Object.values(seats).filter((s) => s !== 'available').length
-  const seatsLeft = Math.max(0, totalSeats - booked)
 
   return NextResponse.json(
     {
@@ -89,8 +100,9 @@ export async function GET(req: Request) {
       fare: tripData.fare || BASE_FARE_INR,
       totalSeats,
       seatsLeft,
-      booked,
+      booked: totalOccupied,
       seats,
+      publicMap,
     },
     {
       status: 200,

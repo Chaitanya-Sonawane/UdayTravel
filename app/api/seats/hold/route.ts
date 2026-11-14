@@ -40,6 +40,10 @@ export async function POST(req: Request) {
       date: parsed.data.date,
       tripId: parsed.data.tripId,
       seatIds: parsed.data.seatIds,
+      family: parsed.data.family,
+      acceptAdjacent: parsed.data.acceptAdjacent,
+      deviceId: parsed.data.deviceId,
+      passengers: parsed.data.passengers,
     })
 
     return NextResponse.json(holdResult, { status: 200 })

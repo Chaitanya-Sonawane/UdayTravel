@@ -162,7 +162,8 @@ export async function confirmBooking(
         order.seatIds,
         grp,
         ticketNo,
-        order.passengers
+        order.passengers,
+        order.uid
       )
 
       // Adjust availability counter

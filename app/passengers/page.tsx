@@ -10,11 +10,10 @@ import {
   ShieldCheck,
   UserCheck,
   Users,
-  Sparkles,
-  BookmarkCheck,
+  Sliders,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useBookingStore, type RiderGender } from '@/lib/booking-store'
+import { useBookingStore, type RiderGender, type PassengerPrefs } from '@/lib/booking-store'
 import { todayIST } from '@/lib/time/ist'
 import { fetchCurrentProfile } from '@/lib/auth/client-auth'
 import { SavedPassenger } from '@/lib/schema/account'
@@ -91,7 +90,9 @@ function PassengerCard({
   name,
   age,
   gender,
+  prefs,
   onChange,
+  onPrefsChange,
   savedTravellers,
   onPickSaved,
 }: {
@@ -99,16 +100,20 @@ function PassengerCard({
   name: string
   age: string
   gender?: RiderGender
+  prefs?: PassengerPrefs
   onChange: (updates: { name?: string; age?: string; gender?: RiderGender }) => void
+  onPrefsChange: (prefs: Partial<PassengerPrefs>) => void
   savedTravellers: SavedPassenger[]
   onPickSaved: (saved: SavedPassenger) => void
 }) {
+  const [showPrefs, setShowPrefs] = useState(false)
+
   return (
     <fieldset className="passenger-card">
       <legend>Passenger {index + 1}</legend>
       <div className="passenger-card-heading">
         <span>Passenger details</span>
-        <small>Required</small>
+        <small className="text-red-500 font-semibold">* Required</small>
       </div>
 
       {/* Quick Select from Saved Travellers */}
@@ -126,7 +131,9 @@ function PassengerCard({
                 className="px-2 py-1 text-xs bg-white border border-amber-300 rounded text-gray-800 hover:bg-[#FF9D00] hover:text-white transition-colors flex items-center gap-1"
               >
                 <span>{saved.name}</span>
-                <small className="opacity-75">({saved.age}, {saved.gender === 'woman' ? 'F' : 'M'})</small>
+                <small className="opacity-75">
+                  ({saved.age}, {saved.gender === 'woman' ? 'F' : 'M'})
+                </small>
               </button>
             ))}
           </div>
@@ -140,6 +147,7 @@ function PassengerCard({
             value={name}
             onChange={(event) => onChange({ name: event.target.value })}
             placeholder="As per ID proof"
+            required
           />
         </label>
         <label className="account-label">
@@ -151,11 +159,15 @@ function PassengerCard({
             min="1"
             max="100"
             placeholder="Age"
+            required
           />
         </label>
       </div>
+
       <div className="gender-section">
-        <span className="account-label">Gender</span>
+        <span className="account-label">
+          Gender <span className="text-red-500">*</span>
+        </span>
         <div className="gender-toggle">
           <button
             type="button"
@@ -175,6 +187,77 @@ function PassengerCard({
           </button>
         </div>
       </div>
+
+      {/* Seat Preferences (Window / Aisle & Front / Middle / Rear) */}
+      <div className="mt-3 pt-2 border-t border-gray-100">
+        <button
+          type="button"
+          onClick={() => setShowPrefs(!showPrefs)}
+          className="text-xs text-[#E89A00] font-semibold flex items-center gap-1.5 hover:underline"
+        >
+          <Sliders size={13} />
+          {showPrefs ? 'Hide seat preferences' : 'Set seat preferences (optional)'}
+        </button>
+
+        {showPrefs && (
+          <div className="mt-2.5 p-2.5 bg-gray-50 rounded-lg space-y-2 border border-gray-100">
+            <div>
+              <span className="text-[11px] font-bold text-gray-700 block mb-1">
+                Seat Position:
+              </span>
+              <div className="flex gap-2">
+                {[
+                  { id: 'any', label: 'Any' },
+                  { id: 'window', label: 'Window' },
+                  { id: 'aisle', label: 'Aisle' },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() =>
+                      onPrefsChange({ seatType: opt.id as 'any' | 'window' | 'aisle' })
+                    }
+                    className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                      (prefs?.seatType || 'any') === opt.id
+                        ? 'bg-[#FF9D00] text-white border-[#FF9D00] font-bold'
+                        : 'bg-white text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <span className="text-[11px] font-bold text-gray-700 block mb-1">Coach Area:</span>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'any', label: 'Any Area' },
+                  { id: 'front', label: 'Front (A-C)' },
+                  { id: 'middle', label: 'Middle (D-G)' },
+                  { id: 'rear', label: 'Rear (H-J)' },
+                ].map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() =>
+                      onPrefsChange({ area: opt.id as 'any' | 'front' | 'middle' | 'rear' })
+                    }
+                    className={`px-2.5 py-1 text-xs rounded border transition-colors ${
+                      (prefs?.area || 'any') === opt.id
+                        ? 'bg-[#FF9D00] text-white border-[#FF9D00] font-bold'
+                        : 'bg-white text-gray-700 border-gray-300'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </fieldset>
   )
 }
@@ -192,6 +275,7 @@ export default function PassengersPage() {
     setStops,
     setPassengerCount,
     updatePassenger,
+    setPassengerPrefs,
     toggleFamily,
   } = useBookingStore()
 
@@ -226,7 +310,16 @@ export default function PassengersPage() {
         fare,
       })
     }
-  }, [setJourney, journey.busName, journey.routeId, journey.tripId, journey.date, journey.departure, journey.arrival, journey.fare])
+  }, [
+    setJourney,
+    journey.busName,
+    journey.routeId,
+    journey.tripId,
+    journey.date,
+    journey.departure,
+    journey.arrival,
+    journey.fare,
+  ])
 
   // 2. Fetch saved passengers if user is logged in
   useEffect(() => {
@@ -237,7 +330,6 @@ export default function PassengersPage() {
           setIsLoggedIn(true)
           if (data.savedPassengers && data.savedPassengers.length > 0) {
             setSavedTravellers(data.savedPassengers)
-            // Pre-fill Passenger 1 with primary user profile if passenger 1 is currently empty
             const firstPassenger = passengers[0]
             if (firstPassenger && !firstPassenger.name && data.savedPassengers[0]) {
               const primary = data.savedPassengers[0]
@@ -276,7 +368,21 @@ export default function PassengersPage() {
       (passenger) => !passenger.name.trim() || !passenger.age || !passenger.gender
     )
     if (incomplete >= 0) {
-      return setError(`Please complete Passenger ${incomplete + 1} details.`)
+      return setError(
+        `Please complete Passenger ${incomplete + 1} details (name, age, and gender are strictly required).`
+      )
+    }
+
+    // Check child requirement: child under 12 requires family flag with adult >= 18
+    const hasChild = passengers.some((p) => Number(p.age) < 12)
+    const hasAdult = passengers.some((p) => Number(p.age) >= 18)
+
+    if (hasChild) {
+      if (!family || passengerCount < 2 || !hasAdult) {
+        return setError(
+          'Children under 12 must travel with an adult (18+). Please turn on "We\'re travelling together (family)".'
+        )
+      }
     }
 
     // 2. Auto-save new travellers to Firestore if user is logged in
@@ -311,7 +417,7 @@ export default function PassengersPage() {
   return (
     <main className="account-page booking-page">
       <Header />
-      <Progress active={step === 'count' ? 1 : 1} />
+      <Progress active={1} />
 
       <section className="booking-shell">
         <div className="booking-intro">
@@ -351,7 +457,9 @@ export default function PassengersPage() {
             </div>
 
             <div className="fare-card">
-              <span>Total fare ({passengerCount} passenger{passengerCount > 1 ? 's' : ''})</span>
+              <span>
+                Total fare ({passengerCount} passenger{passengerCount > 1 ? 's' : ''})
+              </span>
               <strong>₹{total}</strong>
             </div>
 
@@ -459,7 +567,9 @@ export default function PassengersPage() {
                   name={passenger.name}
                   age={passenger.age}
                   gender={passenger.gender}
+                  prefs={passenger.prefs}
                   onChange={(updates) => updatePassenger(passenger.id, updates)}
+                  onPrefsChange={(p) => setPassengerPrefs(passenger.id, p)}
                   savedTravellers={savedTravellers}
                   onPickSaved={(saved) => {
                     updatePassenger(passenger.id, {
@@ -472,11 +582,13 @@ export default function PassengersPage() {
               ))}
 
               <div className="pt-2 space-y-2">
-                <label className="family-option">
-                  <input type="checkbox" checked={family} onChange={toggleFamily} />
-                  Travelling together? <span>Family / Group</span>
-                  <small>Permits adjacent seating for family members</small>
-                </label>
+                {passengerCount >= 2 && (
+                  <label className="family-option">
+                    <input type="checkbox" checked={family} onChange={toggleFamily} />
+                    We&apos;re travelling together (family)
+                    <small>Permits mixed-gender seating side-by-side in empty zones</small>
+                  </label>
+                )}
 
                 {isLoggedIn && (
                   <label className="family-option">

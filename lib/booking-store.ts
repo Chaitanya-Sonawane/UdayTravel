@@ -4,7 +4,20 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 export type RiderGender = 'woman' | 'man'
 export type SeatStatus = 'available' | 'male' | 'female' | 'for-male' | 'for-female' | 'held' | 'booked' | 'blocked'
 export type Seat = { id: string; status: SeatStatus }
-export type Passenger = { id: string; name: string; age: string; gender?: RiderGender; seatId?: string }
+
+export interface PassengerPrefs {
+  seatType?: 'window' | 'aisle' | 'any'
+  area?: 'front' | 'middle' | 'rear' | 'any'
+}
+
+export type Passenger = {
+  id: string
+  name: string
+  age: string
+  gender?: RiderGender
+  seatId?: string
+  prefs?: PassengerPrefs
+}
 
 export type BookingJourney = {
   from: string
@@ -24,6 +37,7 @@ type BookingState = {
   passengerCount: number
   passengers: Passenger[]
   family: boolean
+  acceptAdjacent: boolean
   selected: string[]
   boarding: string
   dropping: string
@@ -34,9 +48,11 @@ type BookingState = {
   setJourney: (journey: Partial<BookingJourney>) => void
   setPassengerCount: (count: number) => void
   updatePassenger: (id: string, updates: Partial<Passenger>) => void
+  setPassengerPrefs: (id: string, prefs: Partial<PassengerPrefs>) => void
   assignSeat: (passengerId: string, seatId: string) => void
   clearSeat: (passengerId: string) => void
   toggleFamily: () => void
+  setAcceptAdjacent: (accept: boolean) => void
   setStops: (boarding: string, dropping: string) => void
   setLoadedSeats: (seats: Seat[]) => void
   startHold: () => void
@@ -44,7 +60,12 @@ type BookingState = {
   clear: () => void
 }
 
-const createPassenger = (index: number): Passenger => ({ id: `passenger-${index + 1}`, name: '', age: '' })
+const createPassenger = (index: number): Passenger => ({
+  id: `passenger-${index + 1}`,
+  name: '',
+  age: '',
+  prefs: { seatType: 'any', area: 'any' },
+})
 
 export const defaultSeats: Seat[] = Array.from({ length: 50 }, (_, index) => {
   const row = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'][Math.floor(index / 5)]
@@ -73,6 +94,7 @@ export const useBookingStore = create<BookingState>()(
       passengerCount: 1,
       passengers: [createPassenger(0)],
       family: false,
+      acceptAdjacent: false,
       selected: [],
       boarding: 'Office · 6:30 AM',
       dropping: 'Shivajinagar, Pune',
@@ -89,6 +111,14 @@ export const useBookingStore = create<BookingState>()(
         set((state) => ({
           passengers: state.passengers.map((passenger) =>
             passenger.id === id ? { ...passenger, ...updates } : passenger
+          ),
+        })),
+      setPassengerPrefs: (id, prefs) =>
+        set((state) => ({
+          passengers: state.passengers.map((passenger) =>
+            passenger.id === id
+              ? { ...passenger, prefs: { ...passenger.prefs, ...prefs } }
+              : passenger
           ),
         })),
       assignSeat: (passengerId, seatId) =>
@@ -108,6 +138,7 @@ export const useBookingStore = create<BookingState>()(
           return { passengers, selected: passengers.flatMap((passenger) => (passenger.seatId ? [passenger.seatId] : [])) }
         }),
       toggleFamily: () => set((state) => ({ family: !state.family })),
+      setAcceptAdjacent: (acceptAdjacent) => set({ acceptAdjacent }),
       setStops: (boarding, dropping) => set({ boarding, dropping }),
       setLoadedSeats: (loadedSeats) => set({ loadedSeats }),
       startHold: () => set({ holdExpiresAt: Date.now() + 300000 }),
@@ -121,6 +152,7 @@ export const useBookingStore = create<BookingState>()(
           grp: undefined,
           holdToken: undefined,
           family: false,
+          acceptAdjacent: false,
           loadedSeats: defaultSeats,
         }),
     }),
