@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 import {
   getExpectedAdminToken,
@@ -89,6 +89,14 @@ describe('Admin Panel Backend & Security', () => {
   })
 
   describe('Admin Guard (requireAdmin)', () => {
+    beforeEach(() => {
+      process.env.ADMIN_AUTH_REQUIRED = 'true'
+    })
+
+    afterEach(() => {
+      delete process.env.ADMIN_AUTH_REQUIRED
+    })
+
     it('approves request with valid Authorization Bearer token', async () => {
       const req = new NextRequest('http://localhost:3000/api/admin/users', {
         headers: { Authorization: `Bearer ${validToken}` },

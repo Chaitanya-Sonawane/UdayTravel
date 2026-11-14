@@ -68,7 +68,6 @@ function getNextDate(dateStr: string, daysAhead = 1): string {
 
 export default function AdminDashboardPage() {
   const router = useRouter()
-  const [isVerifying, setIsVerifying] = useState(true)
   const [activeTab, setActiveTab] = useState<'schedules' | 'users' | 'payments' | 'refunds'>('schedules')
 
   // Payments & Refunds State
@@ -123,24 +122,7 @@ export default function AdminDashboardPage() {
   const [isSavingUser, setIsSavingUser] = useState(false)
   const [userActionNotice, setUserActionNotice] = useState<string | null>(null)
 
-  // 1. Guard check: verify admin session
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const res = await fetch('/api/admin/auth')
-        const data = await res.json()
-        if (!data.authenticated) {
-          router.replace('/admin/login')
-          return
-        }
-        setIsVerifying(false)
-      } catch {
-        router.replace('/admin/login')
-      }
-    }
-    checkAuth()
-  }, [router])
-
+  // 1. Direct access: admin authentication removed
   // 2. Fetch Availability & Bus Schedules
   const fetchAvailability = useCallback(async () => {
     if (!selectedRoute || !selectedDate) return
@@ -150,10 +132,6 @@ export default function AdminDashboardPage() {
 
     try {
       const res = await fetch(`/api/admin/availability?route=${selectedRoute}&date=${selectedDate}`)
-      if (res.status === 401) {
-        router.replace('/admin/login')
-        return
-      }
       if (!res.ok) {
         throw new Error(`Failed with status ${res.status}`)
       }
@@ -165,7 +143,7 @@ export default function AdminDashboardPage() {
     } finally {
       setAvailLoading(false)
     }
-  }, [selectedRoute, selectedDate, router])
+  }, [selectedRoute, selectedDate])
 
   // 3. Fetch Users Directory
   const fetchUsers = useCallback(async () => {
@@ -173,10 +151,6 @@ export default function AdminDashboardPage() {
     setUserActionNotice(null)
     try {
       const res = await fetch('/api/admin/users')
-      if (res.status === 401) {
-        router.replace('/admin/login')
-        return
-      }
       const data = await res.json()
       setUsers(data.users || [])
     } catch (err) {
@@ -184,7 +158,7 @@ export default function AdminDashboardPage() {
     } finally {
       setUsersLoading(false)
     }
-  }, [router])
+  }, [])
 
   const fetchPayments = useCallback(async () => {
     setLoadingPayments(true)
@@ -244,35 +218,33 @@ export default function AdminDashboardPage() {
   }
 
   useEffect(() => {
-    if (!isVerifying) {
-      if (activeTab === 'schedules') {
-        fetchAvailability()
+    if (activeTab === 'schedules') {
+      fetchAvailability()
 
-        // Realtime stream listener for Admin view
-        let eventSource: EventSource | null = null
-        try {
-          eventSource = new EventSource(
-            `/api/availability/stream?route=${selectedRoute}&date=${selectedDate}`
-          )
-          eventSource.onmessage = () => {
-            fetchAvailability()
-          }
-        } catch (err) {
-          console.warn('[Admin Realtime] Stream notice:', err)
+      // Realtime stream listener for Admin view
+      let eventSource: EventSource | null = null
+      try {
+        eventSource = new EventSource(
+          `/api/availability/stream?route=${selectedRoute}&date=${selectedDate}`
+        )
+        eventSource.onmessage = () => {
+          fetchAvailability()
         }
-
-        return () => {
-          if (eventSource) eventSource.close()
-        }
-      } else if (activeTab === 'users') {
-        fetchUsers()
-      } else if (activeTab === 'payments') {
-        fetchPayments()
-      } else if (activeTab === 'refunds') {
-        fetchRefunds()
+      } catch (err) {
+        console.warn('[Admin Realtime] Stream notice:', err)
       }
+
+      return () => {
+        if (eventSource) eventSource.close()
+      }
+    } else if (activeTab === 'users') {
+      fetchUsers()
+    } else if (activeTab === 'payments') {
+      fetchPayments()
+    } else if (activeTab === 'refunds') {
+      fetchRefunds()
     }
-  }, [isVerifying, activeTab, selectedRoute, selectedDate, fetchAvailability, fetchUsers, fetchPayments, fetchRefunds])
+  }, [activeTab, selectedRoute, selectedDate, fetchAvailability, fetchUsers, fetchPayments, fetchRefunds])
 
   // Open Seat Chart Modal for a Trip
   const openSeatChartModal = (trip: AdminTripItem) => {
@@ -502,12 +474,8 @@ export default function AdminDashboardPage() {
     }
   }
 
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/admin/auth', { method: 'DELETE' })
-    } finally {
-      router.replace('/admin/login')
-    }
+  const handleLogout = () => {
+    router.push('/')
   }
 
   // Live counters for active seat chart modal
@@ -519,19 +487,6 @@ export default function AdminDashboardPage() {
     const blocked = values.filter((s) => s === 'blocked').length
     return { available, male, female, blocked, total: 50 }
   }, [chartSeats])
-
-  if (isVerifying) {
-    return (
-      <main className="min-h-screen bg-[#0B0F19] text-white flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-white/70">
-          <Loader2 className="w-8 h-8 animate-spin text-[#FF9D00]" />
-          <p className="text-sm uppercase tracking-widest font-semibold">
-            Connecting to Uday Firebase...
-          </p>
-        </div>
-      </main>
-    )
-  }
 
   return (
     <main className="min-h-screen bg-[#0B0F19] text-white selection:bg-[#FF9D00] selection:text-black">

@@ -26,6 +26,11 @@ export function isValidAdminSecret(providedSecret: string): boolean {
  * Validates whether the incoming request contains a valid admin session cookie or Authorization header.
  */
 export async function requireAdmin(req: Request): Promise<AdminAuthResult> {
+  // If admin authentication is not explicitly required, grant direct access to dashboard
+  if (process.env.ADMIN_AUTH_REQUIRED !== 'true') {
+    return { success: true }
+  }
+
   const expectedToken = getExpectedAdminToken()
   const rawAdminKey = process.env.ADMIN_SECRET_KEY || 'uday_admin_secret_2026'
 
