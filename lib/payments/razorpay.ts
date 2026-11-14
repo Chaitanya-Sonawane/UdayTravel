@@ -56,23 +56,13 @@ export async function createRazorpayOrder(params: {
     const data = await res.json().catch(() => null)
 
     if (!res.ok) {
-      const isAuthFailure = res.status === 401
       const errorDescription =
         data?.error?.description || data?.error?.message || `HTTP ${res.status}`
 
-      // In development or test environments, if Razorpay credentials fail authentication (401)
-      // or gateway is in test mode, return a reliable test order fallback so booking flow is never blocked.
-      if (process.env.NODE_ENV !== 'production' && (isAuthFailure || isRazorpayTestMode())) {
-        console.warn(
-          `[Razorpay Gateway] Live API responded with ${res.status} (${errorDescription}). Utilizing local development test order.`
-        )
-        return {
-          id: `order_dev_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-          amount: params.amountPaise,
-          currency: 'INR',
-          receipt: params.receipt,
-        }
-      }
+      console.error(
+        `[Razorpay Gateway Error] Status: ${res.status}, Message: ${errorDescription}`,
+        data
+      )
 
       throw new AppError(
         ErrorCodes.INTERNAL_ERROR,
@@ -88,21 +78,8 @@ export async function createRazorpayOrder(params: {
     }
   } catch (err: unknown) {
     if (err instanceof AppError) throw err
-
-    // Handle offline / network disconnect in development
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn(
-        '[Razorpay Gateway] Network connection to gateway unreachable in local environment. Providing test order.'
-      )
-      return {
-        id: `order_dev_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
-        amount: params.amountPaise,
-        currency: 'INR',
-        receipt: params.receipt,
-      }
-    }
-
     const message = err instanceof Error ? err.message : 'Razorpay order creation failed'
+    console.error('[Razorpay Order Creation Exception]:', err)
     throw new AppError(ErrorCodes.INTERNAL_ERROR, `Payment gateway error: ${message}`)
   }
 }

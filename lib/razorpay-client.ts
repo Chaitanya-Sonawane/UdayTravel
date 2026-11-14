@@ -55,30 +55,60 @@ type RazorpayConstructor = new (options: CheckoutOptions) => RazorpayInstance
 export function openCheckout(options: CheckoutOptions): void {
   if (typeof window === 'undefined') return
 
-  const razorpay = (window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay
-
-  if (process.env.NEXT_PUBLIC_RAZORPAY_MOCK === 'true' || !razorpay) {
-    if (!razorpay && process.env.NEXT_PUBLIC_RAZORPAY_MOCK !== 'true') {
-      console.warn(
-        '[Razorpay] SDK script not loaded yet or window.Razorpay unavailable. If testing in development, mock fallback can be used.'
-      )
-    }
-    // Mock fallback when testing without network/SDK
-    window.setTimeout(() => {
-      options.handler({
-        razorpay_payment_id: 'pay_mock_' + Math.random().toString(36).slice(2, 10),
-        razorpay_order_id: options.order_id,
-        razorpay_signature: 'mock_signature',
+  const openModal = () => {
+    const razorpay = (window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay
+    if (!razorpay) {
+      console.error('[Razorpay] Razorpay constructor unavailable on window.')
+      options.onPaymentFailed?.({
+        error: {
+          code: 'SDK_NOT_LOADED',
+          description: 'Razorpay checkout script not ready. Please refresh the page and try again.',
+          source: 'checkout_js',
+          step: 'initialization',
+          reason: 'script_missing',
+          metadata: { order_id: options.order_id },
+        },
       })
-    }, 650)
+      return
+    }
+
+    const instance = new razorpay(options)
+
+    if (options.onPaymentFailed) {
+      instance.on('payment.failed', options.onPaymentFailed)
+    }
+
+    instance.open()
+  }
+
+  const existing = (window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay
+  if (existing) {
+    openModal()
     return
   }
 
-  const instance = new razorpay(options)
-
-  if (options.onPaymentFailed) {
-    instance.on('payment.failed', options.onPaymentFailed)
+  // Load checkout.js dynamically if not already in document
+  const existingScript = document.querySelector('script[src*="checkout.razorpay.com"]')
+  if (existingScript) {
+    existingScript.addEventListener('load', () => openModal(), { once: true })
+    return
   }
 
-  instance.open()
+  const script = document.createElement('script')
+  script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+  script.async = true
+  script.onload = () => openModal()
+  script.onerror = () => {
+    options.onPaymentFailed?.({
+      error: {
+        code: 'NETWORK_ERROR',
+        description: 'Failed to load Razorpay checkout script from checkout.razorpay.com. Please check your internet connection.',
+        source: 'network',
+        step: 'loading',
+        reason: 'network_blocked',
+        metadata: { order_id: options.order_id },
+      },
+    })
+  }
+  document.body.appendChild(script)
 }

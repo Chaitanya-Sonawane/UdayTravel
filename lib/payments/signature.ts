@@ -9,7 +9,7 @@ export function verifyPaymentSignature(params: {
   const secret =
     params.secret ||
     process.env.RAZORPAY_KEY_SECRET ||
-    'dummy_razorpay_secret_for_tests'
+    'N160Ry7FB4ByB1k0kvp4trEE'
   const payload = `${params.orderId}|${params.paymentId}`
 
   try {
