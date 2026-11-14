@@ -1,31 +1,97 @@
-# Uday Travels (Firebase)
+# Uday Travels — Bus Booking & Ticketing Platform
 
-Task 1: account creation, journey search, available bus cards, plus the admin trip tools.
-Stack: Next.js (web + /admin), Expo (app), Firebase Auth + Firestore. Shared logic lives in `packages/shared`.
+A production-grade bus reservation, ticketing, and fleet management platform for Uday Travels (operating daily express coaches between Ahilyanagar and Pune).
 
-## Status of this starter (steps 1-2 of the build order)
-- Done and verified: shared types, status logic, India-time helpers, mobile and registration validation (`npm run test:unit`, 20 tests), TypeScript typecheck (`npm run typecheck`).
-- Written but NOT yet run: `firestore.rules` and `tests/rules/firestore.rules.test.ts` (they need the Firestore emulator, which could not be downloaded where this was built). Run `npm run test:rules` on your machine first and fix anything it reports before building more.
-- Not built yet: Next.js site, Expo app, admin screens (steps 3-6).
+## Key Features
 
-## First run
-1. Install: Node 20+, Java 21+ (for the emulator), then `npm install` and `npm i -g firebase-tools`.
-2. `npm run test:unit` and `npm run typecheck` should pass.
-3. `npm run test:rules` must pass before anything else.
-4. `npm run emulators` in one terminal, then in another:
-   `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run seed:demo` (placeholder data, emulator only).
-5. Real project setup: create `uday-travels-dev` and `uday-travels-prod` in the Firebase console, enable Auth (Email/Password) and Firestore, then `firebase use dev`.
-   Deploy rules and indexes to dev: `firebase deploy --only firestore --project uday-travels-dev`.
-6. First admin: create the owner user in Auth, copy the uid, create a Firestore document `admins/<uid>` by hand in the console.
+- **Next.js 16 (App Router) + TypeScript Strict**: Modern web architecture with fast server components and optimized static generation.
+- **Firebase Authentication & Firestore**: Secure customer authentication with persistent local sessions and server-authoritative Firestore data models.
+- **Seat Selection & Realtime Locking**: 2x3 bus seat chart (50 seats) with live SSE real-time state updates and atomic Firestore transaction locks with TTL.
+- **Multi-Passenger Booking**: Support for 1–6 passengers in a single booking with individual seat assignments and saved co-passengers.
+- **Saved Travellers**: Automatically sync and reuse saved passenger profiles linked to the user's Firebase account.
+- **Payment Gateway (Razorpay)**: Production Razorpay integration with integer-paise money handling, signature verification, and webhook deduplication.
+- **Travel Wallet & Credit System**: Full ledger-backed customer wallet for instant credits and seamless checkout deductions.
+- **Cancellations & Automated Refunds**: Policy-enforced cancellation terms with automated seat release and wallet credits.
+- **Comprehensive Admin Portal (`/admin`)**:
+  - Custom schedule creation & date-wise capacity management
+  - Interactive seat chart configuration (blocking, reserving, booking overrides)
+  - User and traveller directory management
+  - Payment and refund reconciliation ledger
+- **Zero Client Trust**: All pricing, seat availability, and financial state transitions are strictly validated and orchestrated on the server.
 
-## Replace before launch
-`scripts/seed-data.ts` holds placeholder stops, durations, bus names and seat counts. Replace with the agency's real data.
+## Tech Stack
 
-## Layout
+- **Framework**: Next.js 16.4.5 (App Router, Turbopack)
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS, Lucide React
+- **Database & Auth**: Firebase Auth, Firebase Firestore (Admin SDK)
+- **Payments**: Razorpay Node SDK
+- **Testing**: Vitest (100+ unit and integration tests)
+
+## Getting Started
+
+### 1. Install Dependencies
+
+```bash
+pnpm install
 ```
-packages/shared/   types, constants, time, status, auth helpers (+ unit tests)
-scripts/           seed.ts (emulator-guarded), seed-data.ts
-tests/rules/       Firestore rules tests (need emulator)
-docs/              agent-rules.md, task-1-notes.md
-firestore.rules, firestore.indexes.json, firebase.json, .firebaserc
+
+### 2. Environment Variables
+
+Create `.env.local` based on `.env.example`:
+
+```env
+# Firebase Client SDK
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
+
+# Firebase Admin SDK
+FIREBASE_PROJECT_ID=...
+FIREBASE_CLIENT_EMAIL=...
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
+
+# Razorpay
+RAZORPAY_KEY_ID=...
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...
+NEXT_PUBLIC_RAZORPAY_KEY_ID=...
 ```
+
+### 3. Run Development Server
+
+```bash
+pnpm dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 4. Run Tests & Typecheck
+
+```bash
+# Run unit & integration test suite
+pnpm test
+
+# Run TypeScript type check
+pnpm typecheck
+
+# Run production build
+pnpm build
+```
+
+## Documentation
+
+Full architectural specifications and guides are located in `/docs`:
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — System architecture, sequence diagrams, and design rules
+- [`docs/BACKEND_AUDIT.md`](docs/BACKEND_AUDIT.md) — Deep architectural audit of existing components
+- [`docs/PAYMENTS.md`](docs/PAYMENTS.md) — Razorpay order lifecycle and webhook deduplication
+- [`docs/WALLET.md`](docs/WALLET.md) — Integer-paise double-entry wallet ledger specification
+- [`docs/SECURITY.md`](docs/SECURITY.md) — Authentication, App Check, and Firestore security rules
+- [`docs/TESTING.md`](docs/TESTING.md) — Test matrix and verification guides
+
+## License
+
+Private and confidential — Uday Travels © 2026.

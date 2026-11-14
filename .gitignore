@@ -1,12 +1,22 @@
-node_modules
+# v0 sandbox internal files
+__v0_runtime_loader.js
+__v0_devtools.tsx
+__v0_jsx-dev-runtime.ts
+.snowflake/
+.design-cache/
+.v0-trash/
+.vercel/
+
+# Environment variables
 .env
-.env.*
-!.env.example
+.env*.local
+.env.production
+.env.development
+
+# Common ignores
+node_modules
+.next/
+.DS_Store
+.dev-firestore-store.json
+tsconfig.tsbuildinfo
 *.log
-.firebase
-firebase-debug.log
-firestore-debug.log
-ui-debug.log
-serviceAccount*.json
-dist
-.next

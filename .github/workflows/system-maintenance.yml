@@ -1,0 +1,38 @@
+name: Nightly System Maintenance
+
+on:
+  schedule:
+    # Run nightly at 18:30 UTC (Midnight IST)
+    - cron: '30 18 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: system-maintenance
+  cancel-in-progress: false
+
+jobs:
+  maintenance:
+    name: Run Nightly Maintenance & Retention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci --prefer-offline --no-audit
+
+      - name: Run System Maintenance Job
+        env:
+          FIREBASE_PROJECT_ID: udaytravels-ad458
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RAZORPAY_KEY_ID: ${{ secrets.RAZORPAY_KEY_ID }}
+          RAZORPAY_KEY_SECRET: ${{ secrets.RAZORPAY_KEY_SECRET }}
+        run: npx tsx backend/src/jobs/cleanup-expired-orders.ts

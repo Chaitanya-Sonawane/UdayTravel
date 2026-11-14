@@ -1,0 +1,12 @@
+'use client'
+
+import Link from 'next/link'
+import { ArrowLeft, ArrowRight, Check, Pencil, ShieldCheck } from 'lucide-react'
+import { useBookingStore } from '@/lib/booking-store'
+
+function Progress() { return <nav className="booking-progress" aria-label="Booking progress">{['Bus', 'Passengers', 'Seats', 'Review', 'Payment'].map((step, index) => <span key={step} className={index <= 3 ? 'active' : ''}><b>{index + 1}</b>{step}</span>)}</nav> }
+export default function ReviewPage() {
+  const { journey, passengers, boarding, dropping } = useBookingStore()
+  const total = passengers.length * journey.fare
+  return <main className="account-page booking-page"><header className="account-header"><Link href="/seats" className="account-back" aria-label="Back to seats"><ArrowLeft /></Link><span className="page-brand"><span className="page-brand-mark">UT</span><span className="page-brand-name">UDAY TRAVELS</span></span><span className="step-chip">4 / 5</span></header><Progress /><section className="booking-shell"><div className="booking-intro"><p>REVIEW BOOKING</p><h1>Everything look right?</h1><small>{journey.from} → {journey.to} · {journey.busName}</small></div><section className="profile-card review-card"><div className="review-heading"><div><ShieldCheck size={20} /><h2>Journey</h2></div><Link href="/availability">Edit</Link></div><div className="review-route"><strong>{journey.from} → {journey.to}</strong><span>{journey.departure} → {journey.arrival}</span></div><div className="review-stops"><span>Boarding<strong>{boarding}</strong></span><span>Dropping<strong>{dropping}</strong></span></div></section><section className="profile-card review-card"><div className="review-heading"><div><ShieldCheck size={20} /><h2>Passengers</h2></div><Link href="/passengers">Edit</Link></div>{passengers.map((passenger, index) => <div className="review-passenger" key={passenger.id}><span><b>Passenger {index + 1}</b><small>{passenger.name} · {passenger.age} years · {passenger.gender === 'woman' ? 'Woman' : 'Man'}</small></span><strong>Seat {passenger.seatId}</strong></div>)}</section><section className="profile-card review-card"><div className="fare-row"><span>{passengers.length} × ₹{journey.fare}</span><b>₹{total}</b></div><div className="fare-row total"><strong>Total</strong><strong>₹{total}</strong></div></section><Link href="/payment" className="account-primary review-cta">Continue to payment <ArrowRight size={17} /></Link><p className="secure-note"><Check size={15} /> Seats held securely for 10 minutes</p></section></main>
+}

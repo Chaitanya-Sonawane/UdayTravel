@@ -1,14 +1,4 @@
 {
-  "indexes": [
-    {
-      "collectionGroup": "trips",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "routeId", "order": "ASCENDING" },
-        { "fieldPath": "dateKey", "order": "ASCENDING" },
-        { "fieldPath": "departAt", "order": "ASCENDING" }
-      ]
-    }
-  ],
+  "indexes": [],
   "fieldOverrides": []
 }

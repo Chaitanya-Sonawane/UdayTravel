@@ -3,57 +3,73 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
-    }
-
-    // Admin = a document exists at admins/{uid}. Created by hand in the console; no client can write it.
-    function isAdmin() {
-      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-
-    function validProfile(d) {
-      return d.keys().hasAll(['name', 'mobile', 'createdAt'])
-        && d.keys().hasOnly(['name', 'mobile', 'email', 'createdAt'])
-        && d.name is string && d.name.size() >= 2 && d.name.size() <= 60
-        && d.mobile is string && d.mobile.matches('^[6-9][0-9]{9}$')
-        && (!('email' in d) || d.email == null || (d.email is string && d.email.size() <= 100))
-        && d.createdAt is timestamp;
-    }
-
-    // Public timetable data
-    match /routes/{routeId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    match /trips/{tripId} {
-      allow read: if true;
-      allow write: if isAdmin();   // seatsLeft moves to server-only writes in Task 3
-    }
-
-    // Internal bus records (registration numbers etc.): admin only. Passengers use fields copied onto trips.
-    match /buses/{busId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /admins/{uid} {
-      allow read: if signedIn() && request.auth.uid == uid;
+    // Deny all writes from client by default across all collections
+    // Users collection: client may read only their own profile; all client writes denied.
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
       allow write: if false;
     }
 
-    match /users/{uid} {
-      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
-      allow create: if signedIn() && request.auth.uid == uid
-        && validProfile(request.resource.data)
-        && request.resource.data.createdAt == request.time;
-      allow update: if signedIn() && request.auth.uid == uid
-        && validProfile(request.resource.data)
-        && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.mobile == resource.data.mobile;
-      allow delete: if false;
+    // Availability collection: client read allowed for bus schedules; writes strictly denied
+    match /availability/{document=**} {
+      allow read: if true;
+      allow write: if false;
     }
 
-    // Everything else (bookings, holds, payments, refunds) is denied until Task 3 adds server code.
+    // Bus seats collection: authenticated read allowed for seat selection; writes denied
+    match /bus_seats/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    // Tickets collection: client can read their own ticket; writes strictly server-side
+    match /tickets/{ticketNo} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Wallets and Wallet Ledger: client can read only their own store credit balance & ledger; writes strictly server-side
+    match /wallets/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+
+      match /ledger/{entryId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    // Refunds: client can read their own refund status; writes strictly server-side
+    match /refunds/{ticketNo} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Orders, Payments, Webhook Events, and Audit Logs: strictly server-only (Admin SDK)
+    match /orders/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /payments/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /webhook_events/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /audit_logs/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Default deny for everything else
+    match /{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
   }
 }

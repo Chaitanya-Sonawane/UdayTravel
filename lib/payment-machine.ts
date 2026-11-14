@@ -1,0 +1,3 @@
+import type { PaymentState } from './schemas'
+export type PaymentEvent = { type: 'CREATE' | 'CHECKOUT' | 'VERIFY' | 'SUCCESS' | 'FAILED' | 'DISMISS' | 'EXPIRE' | 'RESET' }
+export function paymentReducer(state: PaymentState, event: PaymentEvent): PaymentState { if (event.type === 'RESET') return 'idle'; if (event.type === 'CREATE' && (state === 'idle' || state === 'failed' || state === 'dismissed')) return 'creating_order'; if (event.type === 'CHECKOUT') return 'checkout_open'; if (event.type === 'VERIFY') return 'verifying'; if (event.type === 'SUCCESS') return 'success'; if (event.type === 'FAILED') return 'failed'; if (event.type === 'DISMISS') return 'dismissed'; if (event.type === 'EXPIRE') return 'expired'; return state }
