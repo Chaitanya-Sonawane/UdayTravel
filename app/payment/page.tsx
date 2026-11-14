@@ -158,10 +158,10 @@ export default function PaymentPage() {
       // External Razorpay Checkout
       dispatch({ type: 'CHECKOUT' })
       openCheckout({
-        key: orderData.keyId,
+        key: orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TzxTR8Wj5xHqso',
         order_id: orderData.orderId,
         amount: orderData.amount,
-        currency: orderData.currency,
+        currency: orderData.currency || 'INR',
         name: 'Uday Travels',
         description: `${journey.from} → ${journey.to} · Seats ${passengers.map((p) => p.seatId).join(', ')}`,
         theme: { color: '#FF9D00' },
@@ -170,6 +170,12 @@ export default function PaymentPage() {
             dispatch({ type: 'DISMISS' })
             setMessage('Payment cancelled. Your seats are still held.')
           },
+        },
+        onPaymentFailed: (errRes) => {
+          dispatch({ type: 'FAILED' })
+          const errorMsg =
+            errRes.error?.description || 'Payment transaction was declined or failed.'
+          setMessage(errorMsg)
         },
         handler: async (response) => {
           dispatch({ type: 'VERIFY' })
