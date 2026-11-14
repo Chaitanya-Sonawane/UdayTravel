@@ -158,7 +158,7 @@ export default function PaymentPage() {
       // External Razorpay Checkout
       dispatch({ type: 'CHECKOUT' })
       openCheckout({
-        key: orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_TzxTR8Wj5xHqso',
+        key: orderData.keyId || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_U00WmPMLownfgs',
         order_id: orderData.orderId,
         amount: orderData.amount,
         currency: orderData.currency || 'INR',

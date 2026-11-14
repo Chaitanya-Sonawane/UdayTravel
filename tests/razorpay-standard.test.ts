@@ -4,8 +4,8 @@ import { POST as createOrderHandler } from '../app/api/create-order/route'
 import { POST as verifyPaymentHandler } from '../app/api/verify-payment/route'
 
 describe('Razorpay Standard Web Checkout API Endpoints', () => {
-  const TEST_KEY_SECRET = '2VLkeeJYU5lXfLHDIaoZT3J4'
-  const TEST_KEY_ID = 'rzp_test_TzxTR8Wj5xHqso'
+  const TEST_KEY_SECRET = 'N160Ry7FB4ByB1k0kvp4trEE'
+  const TEST_KEY_ID = 'rzp_test_U00WmPMLownfgs'
 
   beforeEach(() => {
     process.env.RAZORPAY_KEY_ID = TEST_KEY_ID

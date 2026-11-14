@@ -19,9 +19,9 @@ function getRazorpayAuth(): { key_id: string; key_secret: string; authHeader: st
   const key_id =
     process.env.RAZORPAY_KEY_ID ||
     process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
-    'rzp_test_TzxTR8Wj5xHqso'
+    'rzp_test_U00WmPMLownfgs'
   const key_secret =
-    process.env.RAZORPAY_KEY_SECRET || '2VLkeeJYU5lXfLHDIaoZT3J4'
+    process.env.RAZORPAY_KEY_SECRET || 'N160Ry7FB4ByB1k0kvp4trEE'
 
   const authHeader = `Basic ${Buffer.from(`${key_id}:${key_secret}`).toString('base64')}`
   return { key_id, key_secret, authHeader }
