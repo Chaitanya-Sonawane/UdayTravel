@@ -54,17 +54,58 @@ export async function POST(req: Request) {
           'Order is already confirmed'
         )
       }
-      return NextResponse.json({
-        grp: existingOrder.grp,
-        orderId: existingOrder.razorpayOrderId || 'INTERNAL_WALLET_ONLY',
-        amount: existingOrder.razorpayPaise,
-        currency: 'INR',
-        keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || 'rzp_test_dummy_key_id',
-        walletDebitPaise: existingOrder.walletDebitPaise,
-        razorpayPaise: existingOrder.razorpayPaise,
-        totalPaise: existingOrder.totalPaise,
-        expiresAt: existingOrder.holdExpiresAt,
-      })
+
+      // Check if existing order has a genuine Razorpay order ID (not a stale dev fallback)
+      const hasValidRazorpayOrder =
+        existingOrder.razorpayOrderId &&
+        !existingOrder.razorpayOrderId.startsWith('order_dev_')
+
+      if (hasValidRazorpayOrder || existingOrder.razorpayPaise === 0) {
+        return NextResponse.json({
+          grp: existingOrder.grp,
+          orderId: existingOrder.razorpayOrderId || 'INTERNAL_WALLET_ONLY',
+          amount: existingOrder.razorpayPaise,
+          currency: 'INR',
+          keyId:
+            process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+            process.env.RAZORPAY_KEY_ID ||
+            'rzp_test_U00WmPMLownfgs',
+          walletDebitPaise: existingOrder.walletDebitPaise,
+          razorpayPaise: existingOrder.razorpayPaise,
+          totalPaise: existingOrder.totalPaise,
+          expiresAt: existingOrder.holdExpiresAt,
+        })
+      }
+
+      // If existing order has a stale fake order ID, generate a live Razorpay order now!
+      if (existingOrder.razorpayPaise > 0) {
+        const rzpOrder = await createRazorpayOrder({
+          amountPaise: existingOrder.razorpayPaise,
+          receipt: grp.substring(0, 40),
+          notes: {
+            grp,
+            uid: auth.uid,
+            seats: seatIds.join(','),
+          },
+        })
+        existingOrder.razorpayOrderId = rzpOrder.id
+        await OrdersRepository.updateOrder(grp, { razorpayOrderId: rzpOrder.id })
+
+        return NextResponse.json({
+          grp: existingOrder.grp,
+          orderId: rzpOrder.id,
+          amount: existingOrder.razorpayPaise,
+          currency: 'INR',
+          keyId:
+            process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+            process.env.RAZORPAY_KEY_ID ||
+            'rzp_test_U00WmPMLownfgs',
+          walletDebitPaise: existingOrder.walletDebitPaise,
+          razorpayPaise: existingOrder.razorpayPaise,
+          totalPaise: existingOrder.totalPaise,
+          expiresAt: existingOrder.holdExpiresAt,
+        })
+      }
     }
 
     // 2. Validate hold token against requested seats
