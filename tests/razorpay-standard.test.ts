@@ -37,6 +37,19 @@ describe('Razorpay Standard Web Checkout API Endpoints', () => {
       const data = await res.json()
       expect(data.error).toContain('Minimum amount is 100 paise')
     })
+
+    it('creates order without throwing undefined status error', async () => {
+      const req = new Request('http://localhost:3000/api/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: 20000, currency: 'INR', receipt: 'test_rcpt_1' }),
+      })
+      const res = await createOrderHandler(req)
+      expect(res.status).toBe(200)
+      const data = await res.json()
+      expect(data.order_id).toBeDefined()
+      expect(data.amount).toBe(20000)
+    })
   })
 
   describe('POST /api/verify-payment', () => {
