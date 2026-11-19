@@ -23,6 +23,7 @@ import { canCancel } from '@/lib/cancellation'
 import { downloadCalendar } from '@/lib/ics'
 import { getTicket, type Ticket } from '@/lib/mock-tickets'
 import { getApiAuthHeaders } from '@/lib/firebase/client'
+import { CancellationModal } from '@/components/cancellation/CancellationModal'
 
 const money = (value: number) => `₹${value}`
 const date = (value: string) =>
@@ -360,83 +361,17 @@ export default function TicketPage() {
         </div>
       )}
 
-      {/* Cancellation Modal */}
+      {/* Cancellation Modal with Full Ticket Details, Live Countdown & 25/75 Refund Breakdown */}
       {cancelModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1000,
-            padding: '1rem',
+        <CancellationModal
+          ticketNo={ticket.ticketNo}
+          isOpen={cancelModal}
+          onClose={() => setCancelModal(false)}
+          onSuccess={(res) => {
+            if (res.ticket) setTicket(res.ticket)
+            setCancelModal(false)
           }}
-        >
-          <div
-            style={{
-              backgroundColor: '#fff',
-              borderRadius: '12px',
-              maxWidth: '420px',
-              width: '100%',
-              padding: '1.5rem',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-            }}
-          >
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.75rem' }}>
-              Confirm Cancellation
-            </h2>
-            <p style={{ color: '#4b5563', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              Are you sure you want to cancel ticket <strong>{ticket.ticketNo}</strong>?
-              A cancellation fee of ₹50 per seat will be deducted. Net refund will be credited to your wallet store credit or original payment method.
-            </p>
-            {cancelError && (
-              <p style={{ color: '#dc2626', fontSize: '0.85rem', marginBottom: '1rem' }}>
-                {cancelError}
-              </p>
-            )}
-            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setCancelModal(false)}
-                style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '6px',
-                  border: '1px solid #d1d5db',
-                  background: '#f9fafb',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                Back
-              </button>
-              <button
-                onClick={handleCancelBooking}
-                disabled={cancelling}
-                style={{
-                  padding: '0.5rem 1rem',
-                  borderRadius: '6px',
-                  border: 'none',
-                  background: '#dc2626',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                }}
-              >
-                {cancelling ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" /> Cancelling...
-                  </>
-                ) : (
-                  'Confirm Cancel'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        />
       )}
     </main>
   )

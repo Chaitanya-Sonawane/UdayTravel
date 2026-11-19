@@ -6,6 +6,9 @@ import { AvailabilityRepository } from '../data/availability.repo'
 import { TicketsRepository } from '../data/tickets.repo'
 import { WalletsRepository } from '../data/wallets.repo'
 import { PaymentsRepository } from '../data/payments.repo'
+import { BookingsRepository, BookingDocument } from '../data/bookings.repo'
+import { TripsRepository } from '../data/trips.repo'
+import { bookSeatsInRtdb } from '../firebase/rtdb'
 import { OrderDoc } from '../schemas/booking.schema'
 import { TicketDoc } from '../schemas/ticket.schema'
 import { PaymentDoc } from '../schemas/payment.schema'
@@ -75,7 +78,11 @@ export async function confirmBooking(
       )
     }
 
-    paymentDetails = await fetchRazorpayPayment(rzpId)
+    paymentDetails = await fetchRazorpayPayment(
+      rzpId,
+      existingOrder.razorpayPaise,
+      existingOrder.razorpayOrderId
+    )
     if (paymentDetails.status !== 'captured') {
       throw new AppError(
         ErrorCodes.PAYMENT_NOT_CAPTURED,
@@ -104,12 +111,14 @@ export async function confirmBooking(
       ? `${timePart.slice(0, 2)}:${timePart.slice(2, 4)}`
       : '06:00'
   const pickup = {
-    name: routeConfig?.boardingPoints[0] || 'Office · 6:30 AM',
-    time: pickupTime,
+    pointId: existingOrder.pickup?.pointId || '',
+    name: existingOrder.pickup?.name || routeConfig?.boardingPoints[0] || 'Office · 6:30 AM',
+    pickupTime: existingOrder.pickup?.pickupTime || pickupTime,
+    time: existingOrder.pickup?.pickupTime || pickupTime,
   }
   const drop = {
-    name: routeConfig?.dropPoints[0] || 'Shivajinagar, Pune',
-    time: '08:45',
+    pointId: existingOrder.drop?.pointId || '',
+    name: existingOrder.drop?.name || routeConfig?.dropPoints[0] || 'Wakadewadi',
   }
 
   try {
@@ -251,6 +260,72 @@ export async function confirmBooking(
         razorpayPaymentId: paymentDetails?.id,
       })
     })
+
+    // 4. Update permanent Firestore collections: bookings and trips
+    try {
+      const bookingDoc: BookingDocument = {
+        id: grp,
+        bookingId: grp,
+        userId: existingOrder.uid,
+        tripId: existingOrder.tripId,
+        routeId: existingOrder.routeId,
+        busId: 'bus_mh16dp4951',
+        travelDate: existingOrder.travelDate,
+        departureTime: pickup.pickupTime || pickupTime,
+        pickup: {
+          pointId: pickup.pointId,
+          name: pickup.name,
+          pickupTime: pickup.pickupTime || pickupTime,
+        },
+        drop: {
+          pointId: drop.pointId,
+          name: drop.name,
+        },
+        pickupPoint: { name: pickup.name, time: pickup.pickupTime || pickupTime },
+        dropPoint: { name: drop.name },
+        seats: existingOrder.seatIds,
+        passengers: existingOrder.passengers.map((p) => ({
+          name: p.name,
+          age: p.age,
+          gender: p.gender,
+          seat: p.seat,
+        })),
+        fare: {
+          perSeat: existingOrder.perSeatPaise / 100,
+          seats: existingOrder.seatIds.length,
+          total: existingOrder.totalPaise / 100,
+        },
+        totalAmount: existingOrder.totalPaise / 100,
+        status: 'confirmed',
+        paymentId: paymentDetails?.id || existingOrder.razorpayPaymentId,
+        ticketId: ticketNo,
+        ticketNo,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      }
+      await BookingsRepository.createBooking(bookingDoc)
+      await TripsRepository.recordBookingInTrip(
+        existingOrder.tripId,
+        existingOrder.seatIds.length,
+        existingOrder.seatIds
+      )
+    } catch (bookingSaveErr) {
+      console.warn('[confirmBooking] Non-blocking bookings/trips Firestore write warning:', bookingSaveErr)
+    }
+
+    // 5. Update Firebase Realtime Database live seat states
+    try {
+      await bookSeatsInRtdb({
+        tripId: existingOrder.tripId,
+        seatIds: existingOrder.seatIds,
+        userId: existingOrder.uid,
+        ticketId: ticketNo,
+        ticketNo,
+        bookingId: grp,
+      })
+    } catch (rtdbErr) {
+      console.warn('[confirmBooking] RTDB seat update warning:', rtdbErr)
+    }
 
     // Notify real-time SSE stream listeners
     notifySeatChartUpdate({

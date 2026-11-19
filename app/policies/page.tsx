@@ -10,12 +10,12 @@ export default function PoliciesPage() {
         <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors">
           <ArrowLeft size={18} /> Back to home
         </Link>
-        <span className="font-bold tracking-widest text-[#FF9D00]">UDAY POLICIES</span>
+        <span className="font-bold tracking-widest text-[#F8B018]">UDAY POLICIES</span>
       </header>
 
       <section className="max-w-3xl mx-auto px-5 py-12 md:py-16 space-y-10">
         <div>
-          <span className="text-xs uppercase tracking-widest text-[#FF9D00] font-semibold">Authoritative Guidelines</span>
+          <span className="text-xs uppercase tracking-widest text-[#F8B018] font-semibold">Authoritative Guidelines</span>
           <h1 className="text-3xl md:text-5xl font-black uppercase mt-2">Terms & Policies</h1>
           <p className="text-white/60 mt-3 text-sm md:text-base">
             Transparent, fair, and reliable terms designed to protect our passengers and ensure a dependable journey.
@@ -25,7 +25,7 @@ export default function PoliciesPage() {
         <div className="space-y-8">
           <article className="border border-white/10 rounded-lg p-6 bg-white/[0.02]">
             <div className="flex items-center gap-3 text-lg font-bold text-white mb-3">
-              <RefreshCw className="text-[#FF9D00]" size={22} />
+              <RefreshCw className="text-[#F8B018]" size={22} />
               <h2>1. Cancellation & Store Credit Refund Policy</h2>
             </div>
             <ul className="space-y-2 text-sm text-white/70 leading-relaxed list-disc list-inside">
@@ -38,7 +38,7 @@ export default function PoliciesPage() {
 
           <article className="border border-white/10 rounded-lg p-6 bg-white/[0.02]">
             <div className="flex items-center gap-3 text-lg font-bold text-white mb-3">
-              <ShieldCheck className="text-[#FF9D00]" size={22} />
+              <ShieldCheck className="text-[#F8B018]" size={22} />
               <h2>2. Gender Safety & Seating Rules</h2>
             </div>
             <ul className="space-y-2 text-sm text-white/70 leading-relaxed list-disc list-inside">
@@ -50,7 +50,7 @@ export default function PoliciesPage() {
 
           <article className="border border-white/10 rounded-lg p-6 bg-white/[0.02]">
             <div className="flex items-center gap-3 text-lg font-bold text-white mb-3">
-              <FileText className="text-[#FF9D00]" size={22} />
+              <FileText className="text-[#F8B018]" size={22} />
               <h2>3. Boarding, Luggage & Identity Proof</h2>
             </div>
             <ul className="space-y-2 text-sm text-white/70 leading-relaxed list-disc list-inside">
@@ -63,7 +63,7 @@ export default function PoliciesPage() {
 
           <article className="border border-white/10 rounded-lg p-6 bg-white/[0.02]">
             <div className="flex items-center gap-3 text-lg font-bold text-white mb-3">
-              <AlertTriangle className="text-[#FF9D00]" size={22} />
+              <AlertTriangle className="text-[#F8B018]" size={22} />
               <h2>4. Privacy & Data Integrity</h2>
             </div>
             <p className="text-sm text-white/70 leading-relaxed">
@@ -74,7 +74,7 @@ export default function PoliciesPage() {
 
         <div className="pt-6 border-t border-white/10 flex items-center justify-between">
           <span className="text-xs text-white/40">Last updated: November 2026</span>
-          <Link href="/availability" className="bg-[#FF9D00] text-[#0B0F19] text-xs font-bold px-4 py-2 rounded-sm hover:bg-[#ffb020] transition-colors">
+          <Link href="/availability" className="bg-[#F8B018] text-[#0B0F19] text-xs font-bold px-4 py-2 rounded-sm hover:bg-[#ffb020] transition-colors">
             Book a Journey
           </Link>
         </div>

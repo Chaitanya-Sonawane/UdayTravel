@@ -18,48 +18,14 @@ import { todayIST } from '@/lib/time/ist'
 import { fetchCurrentProfile } from '@/lib/auth/client-auth'
 import { SavedPassenger } from '@/lib/schema/account'
 import { getApiAuthHeaders } from '@/lib/firebase/client'
-
-const pickupPoints = [
-  'Office',
-  'Ekvira Chowk',
-  'Yashodha Nagar',
-  'HDFC Bank',
-  'Vaani Nagar',
-  'Petrol Pump',
-  'Bhistbag Chowk',
-  'Balaji Kaman',
-  'Sona Nagar Chowk',
-  'Professor Chowk',
-  'Premdan Chowk',
-  'Zopadi Canteen',
-  'Sarda College',
-  'Delhigate',
-  'Nepti Naka Chowk',
-  'Swastik Chowk',
-  'Vinayak Nagar',
-  'Kinetic Chowk',
-  'Rangoli Hotel',
-  'Ambika Nagar Stop',
-]
-
-const dropPoints = [
-  'Wakadewadi',
-  'Sangamwadi',
-  'Yerwada',
-  'Shastri Nagar',
-  'Ramwadi Naka',
-  'Four Points',
-  'Wadgaonsheri',
-  'Viman Nagar',
-  'Chandan Nagar',
-  'Tata Guard Room',
-  'Kharadi Bye Pass',
-  'Wagholi',
-]
+import { getRouteWithCache, formatPickupDisplay, formatDropDisplay } from '@/lib/routes/route-client'
+import { Route, resolveRouteId, format12hTime } from '@/lib/types/route'
+import { ThemedErrorBanner } from '@/components/ui/ThemedErrorBanner'
+import { ThemedDropdown, DropdownOption } from '@/components/ui/ThemedDropdown'
 
 function Header() {
   return (
-    <header className="account-header">
+    <header className="account-header sticky top-0 z-50 bg-white border-b border-gray-200 shadow-xs">
       <Link href="/availability" className="account-back" aria-label="Back to buses">
         <ArrowLeft />
       </Link>
@@ -67,7 +33,6 @@ function Header() {
         <span className="page-brand-mark">UT</span>
         <span className="page-brand-name">UDAY TRAVELS</span>
       </span>
-      <span className="step-chip">2 / 5</span>
     </header>
   )
 }
@@ -120,7 +85,7 @@ function PassengerCard({
       {savedTravellers.length > 0 && (
         <div className="mb-3 p-2 bg-amber-50/70 border border-amber-200/70 rounded-md">
           <span className="text-[11px] font-bold text-amber-900 block mb-1.5 flex items-center gap-1">
-            <UserCheck size={13} className="text-[#FF9D00]" /> Fill from Saved Travellers:
+            <UserCheck size={13} className="text-[#F8B018]" /> Fill from Saved Travellers:
           </span>
           <div className="flex flex-wrap gap-1.5">
             {savedTravellers.map((saved) => (
@@ -128,7 +93,7 @@ function PassengerCard({
                 key={saved.id}
                 type="button"
                 onClick={() => onPickSaved(saved)}
-                className="px-2 py-1 text-xs bg-white border border-amber-300 rounded text-gray-800 hover:bg-[#FF9D00] hover:text-white transition-colors flex items-center gap-1"
+                className="px-2 py-1 text-xs bg-white border border-amber-300 rounded text-gray-800 hover:bg-[#F8B018] hover:text-white transition-colors flex items-center gap-1"
               >
                 <span>{saved.name}</span>
                 <small className="opacity-75">
@@ -219,7 +184,7 @@ function PassengerCard({
                     }
                     className={`px-2.5 py-1 text-xs rounded border transition-colors ${
                       (prefs?.seatType || 'any') === opt.id
-                        ? 'bg-[#FF9D00] text-white border-[#FF9D00] font-bold'
+                        ? 'bg-[#F8B018] text-white border-[#F8B018] font-bold'
                         : 'bg-white text-gray-700 border-gray-300'
                     }`}
                   >
@@ -246,7 +211,7 @@ function PassengerCard({
                     }
                     className={`px-2.5 py-1 text-xs rounded border transition-colors ${
                       (prefs?.area || 'any') === opt.id
-                        ? 'bg-[#FF9D00] text-white border-[#FF9D00] font-bold'
+                        ? 'bg-[#F8B018] text-white border-[#F8B018] font-bold'
                         : 'bg-white text-gray-700 border-gray-300'
                     }`}
                   >
@@ -271,6 +236,8 @@ export default function PassengersPage() {
     family,
     boarding,
     dropping,
+    pickupSnapshot,
+    dropSnapshot,
     setJourney,
     setStops,
     setPassengerCount,
@@ -284,9 +251,57 @@ export default function PassengersPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [saveToProfile, setSaveToProfile] = useState(true)
   const [error, setError] = useState('')
+  const [routeData, setRouteData] = useState<Route | null>(null)
+  const [loadingRoute, setLoadingRoute] = useState(true)
+  const [routeNotAvailable, setRouteNotAvailable] = useState(false)
+
+  // 1. Initialize route points with cache & quota optimization
+  useEffect(() => {
+    let active = true
+    async function loadRouteData() {
+      const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+      const routeParam = journey.routeId || searchParams?.get('route') || journey.from || 'AHM_PUN'
+      const toParam = journey.to || (routeParam === 'AHM_PUN' ? 'Pune' : 'Ahilyanagar')
+      const canonicalId = resolveRouteId(routeParam, toParam)
+      if (!canonicalId) {
+        if (active) {
+          setRouteNotAvailable(true)
+          setLoadingRoute(false)
+        }
+        return
+      }
+
+      setLoadingRoute(true)
+      try {
+        const route = await getRouteWithCache(canonicalId)
+        if (!active) return
+
+        if (!route || !route.active || !route.pickupPoints || route.pickupPoints.length === 0) {
+          setRouteData(route)
+          setRouteNotAvailable(true)
+        } else {
+          setRouteData(route)
+          setRouteNotAvailable(false)
+        }
+      } catch (err) {
+        console.warn('[PassengersPage] Failed to load route points:', err)
+        if (active) setRouteNotAvailable(true)
+      } finally {
+        if (active) setLoadingRoute(false)
+      }
+    }
+
+    loadRouteData()
+    return () => {
+      active = false
+    }
+  }, [journey.routeId, journey.from, journey.to])
 
   // 1. Initialize journey parameters from query
   useEffect(() => {
+    if (boarding === 'Office · 6:30 AM') {
+      setStops('', dropping)
+    }
     const searchParams = new URLSearchParams(window.location.search)
     const busName = searchParams.get('busName') || journey.busName
     const route = searchParams.get('route') || journey.routeId || 'AHM_PUN'
@@ -336,7 +351,7 @@ export default function PassengersPage() {
               updatePassenger(firstPassenger.id, {
                 name: primary.name,
                 age: String(primary.age),
-                gender: primary.gender,
+                gender: primary.gender?.toLowerCase() === 'female' || primary.gender?.toLowerCase() === 'woman' ? 'woman' : 'man',
               })
             }
           }
@@ -357,6 +372,9 @@ export default function PassengersPage() {
 
   const continueToSeats = async () => {
     // 1. Validation
+    if (routeNotAvailable) {
+      return setError('Boarding points not available for this route yet.')
+    }
     if (!boarding) {
       return setError('Please choose your pick-up boarding point.')
     }
@@ -371,18 +389,6 @@ export default function PassengersPage() {
       return setError(
         `Please complete Passenger ${incomplete + 1} details (name, age, and gender are strictly required).`
       )
-    }
-
-    // Check child requirement: child under 12 requires family flag with adult >= 18
-    const hasChild = passengers.some((p) => Number(p.age) < 12)
-    const hasAdult = passengers.some((p) => Number(p.age) >= 18)
-
-    if (hasChild) {
-      if (!family || passengerCount < 2 || !hasAdult) {
-        return setError(
-          'Children under 12 must travel with an adult (18+). Please turn on "We\'re travelling together (family)".'
-        )
-      }
     }
 
     // 2. Auto-save new travellers to Firestore if user is logged in
@@ -421,11 +427,7 @@ export default function PassengersPage() {
 
       <section className="booking-shell">
         <div className="booking-intro">
-          <p>PASSENGER DETAILS</p>
-          <h1>{step === 'count' ? 'How many passengers are travelling?' : 'Who is travelling?'}</h1>
-          <small>
-            {journey.busName} · {journey.from} → {journey.to}
-          </small>
+          <h1 className="text-base sm:text-lg font-bold text-gray-900 tracking-tight">Passenger Details</h1>
         </div>
 
         {step === 'count' ? (
@@ -433,7 +435,6 @@ export default function PassengersPage() {
             <div className="count-row">
               <div>
                 <span className="account-label">Adults / Travellers</span>
-                <small>₹{journey.fare} per passenger</small>
               </div>
               <div className="quantity-control">
                 <button
@@ -442,7 +443,7 @@ export default function PassengersPage() {
                   disabled={passengerCount <= 1}
                   aria-label="Remove passenger"
                 >
-                  <Minus size={18} />
+                  <Minus size={20} strokeWidth={3} />
                 </button>
                 <strong>{passengerCount}</strong>
                 <button
@@ -451,7 +452,7 @@ export default function PassengersPage() {
                   disabled={passengerCount >= 6}
                   aria-label="Add passenger"
                 >
-                  <Plus size={18} />
+                  <Plus size={20} strokeWidth={3} />
                 </button>
               </div>
             </div>
@@ -485,67 +486,77 @@ export default function PassengersPage() {
                 <span>Required</span>
               </div>
 
-              <label className="account-label">
-                Pick-up point ({journey.from})
-                <select
-                  value={boarding}
-                  onChange={(event) => setStops(event.target.value, dropping)}
-                  required
-                >
-                  <option value="">Select pick-up point</option>
-                  {pickupPoints.map((point, index) => (
-                    <option
-                      key={point}
-                      value={`${point} · ${
-                        index < 6
-                          ? '6:30 AM'
-                          : index < 7
-                          ? '6:35 AM'
-                          : index < 10
-                          ? '6:40 AM'
-                          : index < 14
-                          ? '6:45 AM'
-                          : index < 15
-                          ? '6:50 AM'
-                          : index < 16
-                          ? '7:00 AM'
-                          : '7:05 AM'
-                      }`}
-                    >
-                      {point} ·{' '}
-                      {index < 6
-                        ? '6:30 AM'
-                        : index < 7
-                        ? '6:35 AM'
-                        : index < 10
-                        ? '6:40 AM'
-                        : index < 14
-                        ? '6:45 AM'
-                        : index < 15
-                        ? '6:50 AM'
-                        : index < 16
-                        ? '7:00 AM'
-                        : '7:05 AM'}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {loadingRoute ? (
+                <div className="py-4 text-center text-sm text-gray-500">
+                  Loading stops for route...
+                </div>
+              ) : routeNotAvailable ? (
+                <div className="p-4 bg-amber-50 border border-amber-300 rounded-lg text-amber-900">
+                  <p className="font-semibold text-sm">Boarding points not available for this route yet</p>
+                  <p className="text-xs text-amber-700 mt-1">
+                    Please select an active route with scheduled stops, or contact support.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <ThemedDropdown
+                    id="pickup-select"
+                    label={`Pick-up point (${journey.from})`}
+                    placeholder="Select pickup point"
+                    value={pickupSnapshot?.pointId || ''}
+                    required
+                    options={(routeData?.pickupPoints || [])
+                      .filter((p) => p.active !== false)
+                      .sort((a, b) => a.sequence - b.sequence)
+                      .map((point) => ({
+                        value: point.id,
+                        label: point.name,
+                        subLabel: format12hTime(point.pickupTime),
+                      }))}
+                    onChange={(selectedId) => {
+                      const p = (routeData?.pickupPoints || []).find((item) => item.id === selectedId)
+                      if (p) {
+                        setStops(
+                          formatPickupDisplay(p),
+                          dropping,
+                          { pointId: p.id, name: p.name, pickupTime: p.pickupTime },
+                          dropSnapshot
+                        )
+                      } else {
+                        setStops('', dropping, null, dropSnapshot)
+                      }
+                    }}
+                  />
 
-              <label className="account-label">
-                Drop point ({journey.to})
-                <select
-                  value={dropping}
-                  onChange={(event) => setStops(boarding, event.target.value)}
-                  required
-                >
-                  <option value="">Select drop point</option>
-                  {dropPoints.map((point) => (
-                    <option key={point} value={point}>
-                      {point}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  <ThemedDropdown
+                    id="drop-select"
+                    label={`Drop point (${journey.to})`}
+                    placeholder="Select drop point"
+                    value={dropSnapshot?.pointId || ''}
+                    required
+                    options={(routeData?.dropPoints || [])
+                      .filter((d) => d.active !== false)
+                      .sort((a, b) => a.sequence - b.sequence)
+                      .map((point) => ({
+                        value: point.id,
+                        label: point.name,
+                      }))}
+                    onChange={(selectedId) => {
+                      const d = (routeData?.dropPoints || []).find((item) => item.id === selectedId)
+                      if (d) {
+                        setStops(
+                          boarding,
+                          formatDropDisplay(d),
+                          pickupSnapshot,
+                          { pointId: d.id, name: d.name }
+                        )
+                      } else {
+                        setStops(boarding, '', pickupSnapshot, null)
+                      }
+                    }}
+                  />
+                </div>
+              )}
             </section>
 
             {/* PASSENGERS LIST */}
@@ -575,7 +586,7 @@ export default function PassengersPage() {
                     updatePassenger(passenger.id, {
                       name: saved.name,
                       age: String(saved.age),
-                      gender: saved.gender,
+                      gender: saved.gender?.toLowerCase() === 'female' || saved.gender?.toLowerCase() === 'woman' ? 'woman' : 'man',
                     })
                   }}
                 />
@@ -585,8 +596,8 @@ export default function PassengersPage() {
                 {passengerCount >= 2 && (
                   <label className="family-option">
                     <input type="checkbox" checked={family} onChange={toggleFamily} />
-                    We&apos;re travelling together (family)
-                    <small>Permits mixed-gender seating side-by-side in empty zones</small>
+                    We&apos;re travelling together
+                    <small>Helps suggest contiguous seats together</small>
                   </label>
                 )}
 
@@ -605,13 +616,22 @@ export default function PassengersPage() {
             </section>
 
             {error && (
-              <p className="inline-error" role="alert">
-                ! {error}
-              </p>
+              <div className="my-3">
+                <ThemedErrorBanner
+                  title="Required Details"
+                  message={error}
+                  onDismiss={() => setError('')}
+                  variant="warning"
+                />
+              </div>
             )}
 
-            <button className="account-primary" type="submit">
-              Continue to seat selection <ArrowRight size={17} />
+            <button
+              className="account-primary"
+              type="submit"
+              disabled={routeNotAvailable || loadingRoute}
+            >
+              {routeNotAvailable ? 'Stops Not Available' : 'Continue to seat selection'} <ArrowRight size={17} />
             </button>
           </form>
         )}

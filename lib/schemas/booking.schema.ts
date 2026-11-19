@@ -13,7 +13,7 @@ export const HoldPassengerSchema = z.object({
 export type HoldPassenger = z.infer<typeof HoldPassengerSchema>
 
 export const SeatHoldRequestSchema = z.object({
-  routeId: z.enum(['AHM_PUN', 'PUN_AHM']),
+  routeId: z.string().min(1, 'Route ID is required'),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   tripId: z.string().min(1, 'Trip ID is required'),
   family: z.boolean().default(false),
@@ -47,12 +47,25 @@ export type OrderStatus = z.infer<typeof OrderStatusSchema>
 export const OrderDocSchema = z.object({
   grp: z.string().min(1),
   uid: z.string().min(1),
-  routeId: z.enum(['AHM_PUN', 'PUN_AHM']),
+  routeId: z.string().min(1),
   tripId: z.string().min(1),
   travelDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   busName: z.string(),
   seatIds: z.array(z.string().regex(SeatIdRegex)).min(1).max(6),
   passengers: z.array(PassengerDetailSchema).min(1).max(6),
+  pickup: z
+    .object({
+      pointId: z.string().optional(),
+      name: z.string(),
+      pickupTime: z.string().optional(),
+    })
+    .optional(),
+  drop: z
+    .object({
+      pointId: z.string().optional(),
+      name: z.string(),
+    })
+    .optional(),
   perSeatPaise: z.number().int().nonnegative(),
   totalPaise: z.number().int().nonnegative(),
   walletDebitPaise: z.number().int().nonnegative(),

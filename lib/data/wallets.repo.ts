@@ -172,7 +172,7 @@ export class WalletsRepository {
     const ledgerEntry: LedgerEntry = {
       entryId,
       uid,
-      type: 'SPEND',
+      type: 'BOOKING_PAYMENT',
       amountPaise: -amountPaise,
       balanceBeforePaise,
       balanceAfterPaise,

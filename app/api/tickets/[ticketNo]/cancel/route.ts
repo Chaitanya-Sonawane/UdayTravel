@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/server/guard'
 import { cancelBooking } from '@/lib/payments/cancel'
 import { AppError } from '@/lib/errors/app-error'
+import { buildCancellationNotification } from '@/lib/notifications/cancellation'
 
 export async function POST(
   req: Request,
@@ -37,8 +38,26 @@ export async function POST(
       reason: body.reason,
     })
 
+    const notif = buildCancellationNotification(result.ticket, {
+      sourceRefundPaise: result.refund?.sourceRefundPaise,
+      walletRefundPaise: result.refund?.walletRefundPaise,
+    })
+
     return NextResponse.json({
       success: true,
+      ticketNo: notif.ticketNo,
+      dateWithDay: notif.dateWithDay,
+      departureTime: notif.departureTime,
+      busNumber: notif.busNumber,
+      refundAmount: notif.refundAmount,
+      refundAmountPaise: notif.refundAmountPaise,
+      walletCredit: notif.walletCredit,
+      walletCreditPaise: notif.walletCreditPaise,
+      notification: {
+        smsText: notif.smsText,
+        emailSubject: notif.emailSubject,
+        emailBody: notif.emailBody,
+      },
       ticket: result.ticket,
       refund: result.refund,
       refundDoc: result.refundDoc,

@@ -42,5 +42,6 @@ export default defineConfig({
   },
   test: {
     setupFiles: ['./tests/setup.ts'],
+    exclude: ['**/node_modules/**', '**/_archive_legacy/**', '**/backend/**'],
   },
 })

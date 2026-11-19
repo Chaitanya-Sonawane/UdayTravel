@@ -73,7 +73,7 @@ export function RazorpayCheckoutButton({
           contact: customerMobile || '',
         },
         theme: {
-          color: '#FF9D00',
+          color: '#F8B018',
         },
         modal: {
           ondismiss: () => {
@@ -153,7 +153,7 @@ export function RazorpayCheckoutButton({
         disabled={loading}
         className={
           className ||
-          'inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold bg-[#FF9D00] text-[#0B0F19] hover:bg-[#e08b00] disabled:opacity-60 transition-all shadow-md'
+          'inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-bold bg-[#F8B018] text-[#0B0F19] hover:bg-[#e08b00] disabled:opacity-60 transition-all shadow-md'
         }
       >
         {loading ? (

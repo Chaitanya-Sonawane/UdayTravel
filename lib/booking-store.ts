@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { BookingPickupPoint, BookingDropPoint } from './types/route'
 
 export type RiderGender = 'woman' | 'man'
 export type SeatStatus = 'available' | 'male' | 'female' | 'for-male' | 'for-female' | 'held' | 'booked' | 'blocked'
@@ -41,6 +42,8 @@ type BookingState = {
   selected: string[]
   boarding: string
   dropping: string
+  pickupSnapshot?: BookingPickupPoint | null
+  dropSnapshot?: BookingDropPoint | null
   holdExpiresAt?: number
   grp?: string
   holdToken?: string
@@ -53,7 +56,12 @@ type BookingState = {
   clearSeat: (passengerId: string) => void
   toggleFamily: () => void
   setAcceptAdjacent: (accept: boolean) => void
-  setStops: (boarding: string, dropping: string) => void
+  setStops: (
+    boarding: string,
+    dropping: string,
+    pickupSnapshot?: BookingPickupPoint | null,
+    dropSnapshot?: BookingDropPoint | null
+  ) => void
   setLoadedSeats: (seats: Seat[]) => void
   startHold: () => void
   setHold: (grp: string, holdToken: string, expiresAt: number) => void
@@ -96,10 +104,30 @@ export const useBookingStore = create<BookingState>()(
       family: false,
       acceptAdjacent: false,
       selected: [],
-      boarding: 'Office · 6:30 AM',
-      dropping: 'Shivajinagar, Pune',
+      boarding: '',
+      dropping: '',
+      pickupSnapshot: null,
+      dropSnapshot: null,
       loadedSeats: defaultSeats,
-      setJourney: (journey) => set((state) => ({ journey: { ...state.journey, ...journey } })),
+      setJourney: (newJourney) =>
+        set((state) => {
+          const routeChanged =
+            (newJourney.routeId && newJourney.routeId !== state.journey.routeId) ||
+            (newJourney.from && newJourney.from !== state.journey.from) ||
+            (newJourney.to && newJourney.to !== state.journey.to)
+
+          return {
+            journey: { ...state.journey, ...newJourney },
+            ...(routeChanged
+              ? {
+                  boarding: '',
+                  dropping: '',
+                  pickupSnapshot: null,
+                  dropSnapshot: null,
+                }
+              : {}),
+          }
+        }),
       setPassengerCount: (count) =>
         set((state) => {
           const safeCount = Math.max(1, Math.min(6, count))
@@ -139,7 +167,13 @@ export const useBookingStore = create<BookingState>()(
         }),
       toggleFamily: () => set((state) => ({ family: !state.family })),
       setAcceptAdjacent: (acceptAdjacent) => set({ acceptAdjacent }),
-      setStops: (boarding, dropping) => set({ boarding, dropping }),
+      setStops: (boarding, dropping, pickupSnapshot, dropSnapshot) =>
+        set((state) => ({
+          boarding,
+          dropping,
+          pickupSnapshot: pickupSnapshot !== undefined ? pickupSnapshot : state.pickupSnapshot,
+          dropSnapshot: dropSnapshot !== undefined ? dropSnapshot : state.dropSnapshot,
+        })),
       setLoadedSeats: (loadedSeats) => set({ loadedSeats }),
       startHold: () => set({ holdExpiresAt: Date.now() + 300000 }),
       setHold: (grp, holdToken, expiresAt) => set({ grp, holdToken, holdExpiresAt: expiresAt }),
@@ -148,6 +182,10 @@ export const useBookingStore = create<BookingState>()(
           passengerCount: 1,
           passengers: [createPassenger(0)],
           selected: [],
+          boarding: '',
+          dropping: '',
+          pickupSnapshot: null,
+          dropSnapshot: null,
           holdExpiresAt: undefined,
           grp: undefined,
           holdToken: undefined,

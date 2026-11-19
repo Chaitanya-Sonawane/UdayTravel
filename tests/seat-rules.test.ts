@@ -85,64 +85,30 @@ describe('Seat Rules Engine (Pure Domain)', () => {
   })
 
   describe('Ladder levels: levelFor', () => {
-    it('returns Level 0 for free seat in an empty or same-gender zone', () => {
+    it('returns Level 0 for any free seat', () => {
       const seats: Record<string, SeatState> = {
         A1: { state: 'CONFIRMED', gender: 'F' },
       }
-      // Woman looking at A2 (same zone): Level 0
+      // Any free seat is open (level 0) for male or female
       expect(levelFor(seats, 'A2', 'F', tFarBefore, baseDeparture)).toBe(0)
-      // Woman looking at B1 (empty zone): Level 0
-      expect(levelFor(seats, 'B1', 'F', tFarBefore, baseDeparture)).toBe(0)
+      expect(levelFor(seats, 'A2', 'M', tFarBefore, baseDeparture)).toBe(0)
+      expect(levelFor(seats, 'B1', 'M', tFarBefore, baseDeparture)).toBe(0)
     })
 
-    it('returns Level 1 for free seat with empty buffer in 3-seat side', () => {
-      // In row A right side (A3, A4, A5), A3 is occupied by a woman F.
-      // A4 is empty buffer.
-      // A5 is at the far end.
-      const seats: Record<string, SeatState> = {
-        A3: { state: 'CONFIRMED', gender: 'F' },
-      }
-      // Male looking at A4: neighbour A3 is F -> adjacent to F, not level 1
-      expect(levelFor(seats, 'A4', 'M', tFarBefore, baseDeparture)).toBeNull()
-      // Male looking at A5: neighbour A4 is empty -> Level 1!
-      expect(levelFor(seats, 'A5', 'M', tFarBefore, baseDeparture)).toBe(1)
-    })
-
-    it('returns null for male at A2 when A1 is occupied by F before T-6h', () => {
+    it('returns null for already occupied or held seats', () => {
       const seats: Record<string, SeatState> = {
         A1: { state: 'CONFIRMED', gender: 'F' },
+        A2: { state: 'HELD', gender: 'M', holdExpiresAt: tFarBefore + 60000 },
+        A3: { state: 'BLOCKED' },
       }
+      expect(levelFor(seats, 'A1', 'F', tFarBefore, baseDeparture)).toBeNull()
       expect(levelFor(seats, 'A2', 'M', tFarBefore, baseDeparture)).toBeNull()
-    })
-
-    it('returns Level 2 when within T-6h or fullness >= 90%', () => {
-      const seats: Record<string, SeatState> = {
-        A1: { state: 'CONFIRMED', gender: 'F' },
-      }
-      // At T-5h59m: Level 2 opens
-      expect(levelFor(seats, 'A2', 'M', tAdjacent, baseDeparture)).toBe(2)
-
-      // Or at T-24h if bus is >= 90% full (45 seats taken)
-      for (let i = 0; i < 46; i++) {
-        const row = String.fromCharCode(65 + Math.floor(i / 5))
-        const col = (i % 5) + 1
-        seats[`${row}${col}`] = { state: 'CONFIRMED', gender: 'F' }
-      }
-      // B1 was occupied; delete it so 45 seats remain taken (45 / 50 = 90% full)
-      delete seats['B1']
-      expect(levelFor(seats, 'B1', 'M', tFarBefore, baseDeparture)).toBe(2)
-    })
-
-    it('returns OPEN at T-1h for all free seats', () => {
-      const seats: Record<string, SeatState> = {
-        A1: { state: 'CONFIRMED', gender: 'F' },
-      }
-      expect(levelFor(seats, 'A2', 'M', tOpen, baseDeparture)).toBe('OPEN')
+      expect(levelFor(seats, 'A3', 'F', tFarBefore, baseDeparture)).toBeNull()
     })
   })
 
   describe('evaluate() validation', () => {
-    it('accepts valid Level 0 solo booking', () => {
+    it('accepts valid solo booking', () => {
       const seats: Record<string, SeatState> = {}
       const res = evaluate(
         seats,
@@ -160,58 +126,7 @@ describe('Seat Rules Engine (Pure Domain)', () => {
       }
     })
 
-    it('rejects if child under 12 is booked without family flag or without adult', () => {
-      const seats: Record<string, SeatState> = {}
-      const res1 = evaluate(
-        seats,
-        {
-          family: false,
-          acceptAdjacent: false,
-          pax: [{ seatId: 'A1', gender: 'F', age: 10 }],
-        },
-        tFarBefore,
-        baseDeparture
-      )
-      expect(res1.ok).toBe(false)
-      if (!res1.ok) expect(res1.code).toBe('FAMILY_INVALID')
-
-      // Child with another child without adult
-      const res2 = evaluate(
-        seats,
-        {
-          family: true,
-          acceptAdjacent: false,
-          pax: [
-            { seatId: 'A1', gender: 'F', age: 10 },
-            { seatId: 'A2', gender: 'M', age: 11 },
-          ],
-        },
-        tFarBefore,
-        baseDeparture
-      )
-      expect(res2.ok).toBe(false)
-      if (!res2.ok) expect(res2.code).toBe('FAMILY_INVALID')
-    })
-
-    it('accepts child under 12 with family flag and adult >= 18', () => {
-      const seats: Record<string, SeatState> = {}
-      const res = evaluate(
-        seats,
-        {
-          family: true,
-          acceptAdjacent: false,
-          pax: [
-            { seatId: 'A1', gender: 'F', age: 10 },
-            { seatId: 'A2', gender: 'F', age: 30 },
-          ],
-        },
-        tFarBefore,
-        baseDeparture
-      )
-      expect(res.ok).toBe(true)
-    })
-
-    it('rejects non-family passengers of different genders in the same zone', () => {
+    it('allows passengers of different genders in the same zone freely', () => {
       const seats: Record<string, SeatState> = {}
       const res = evaluate(
         seats,
@@ -226,104 +141,47 @@ describe('Seat Rules Engine (Pure Domain)', () => {
         tFarBefore,
         baseDeparture
       )
-      expect(res.ok).toBe(false)
-      if (!res.ok) expect(res.code).toBe('SEAT_GENDER_ZONE')
+      expect(res.ok).toBe(true)
     })
 
-    it('allows family members of different genders in an empty zone', () => {
-      const seats: Record<string, SeatState> = {}
+    it('allows booking next to existing passengers of opposite gender freely', () => {
+      const seats: Record<string, SeatState> = {
+        A1: { state: 'CONFIRMED', gender: 'F' },
+      }
       const res = evaluate(
         seats,
         {
-          family: true,
+          family: false,
           acceptAdjacent: false,
-          pax: [
-            { seatId: 'A1', gender: 'M', age: 30 },
-            { seatId: 'A2', gender: 'F', age: 28 },
-          ],
+          pax: [{ seatId: 'A2', gender: 'M', age: 25 }],
         },
         tFarBefore,
         baseDeparture
       )
       expect(res.ok).toBe(true)
-      if (res.ok) {
-        expect(res.levels['A1']).toBe(0)
-        expect(res.levels['A2']).toBe(0)
-      }
     })
 
-    it('rejects family members mixing gender in a zone that already has a stranger', () => {
+    it('rejects when requested seat is already booked', () => {
       const seats: Record<string, SeatState> = {
-        A3: { state: 'CONFIRMED', gender: 'F' }, // Stranger woman in A3
+        A1: { state: 'CONFIRMED', gender: 'F' },
       }
-      // Family tries to book A4 (M) and A5 (F) in the same zone with stranger
       const res = evaluate(
         seats,
         {
-          family: true,
+          family: false,
           acceptAdjacent: false,
-          pax: [
-            { seatId: 'A4', gender: 'M', age: 35 },
-            { seatId: 'A5', gender: 'F', age: 32 },
-          ],
+          pax: [{ seatId: 'A1', gender: 'M', age: 25 }],
         },
         tFarBefore,
         baseDeparture
       )
       expect(res.ok).toBe(false)
-      if (!res.ok) expect(res.code).toBe('SEAT_GENDER_ZONE')
-    })
-
-    it('requires acceptAdjacent for Level 2 seats', () => {
-      const seats: Record<string, SeatState> = {
-        A1: { state: 'CONFIRMED', gender: 'F' },
-      }
-      // All other zones are full of women, so lowest available level for M is 2 at tAdjacent
-      for (let r = 66; r <= 74; r++) {
-        // Rows B..J full
-        const row = String.fromCharCode(r)
-        for (let c = 1; c <= 5; c++) {
-          seats[`${row}${c}`] = { state: 'CONFIRMED', gender: 'F' }
-        }
-      }
-      // Right side of A is also taken
-      seats['A3'] = { state: 'CONFIRMED', gender: 'F' }
-      seats['A4'] = { state: 'CONFIRMED', gender: 'F' }
-      seats['A5'] = { state: 'CONFIRMED', gender: 'F' }
-      // Only A2 is free!
-      expect(lowestAvailableLevel(seats, 'M', tAdjacent, baseDeparture)).toBe(2)
-
-      // Without consent -> fails
-      const resWithout = evaluate(
-        seats,
-        {
-          family: false,
-          acceptAdjacent: false,
-          pax: [{ seatId: 'A2', gender: 'M', age: 25 }],
-        },
-        tAdjacent,
-        baseDeparture
-      )
-      expect(resWithout.ok).toBe(false)
-      if (!resWithout.ok) expect(resWithout.code).toBe('ADJACENT_CONSENT_REQUIRED')
-
-      // With consent -> succeeds
-      const resWith = evaluate(
-        seats,
-        {
-          family: false,
-          acceptAdjacent: true,
-          pax: [{ seatId: 'A2', gender: 'M', age: 25 }],
-        },
-        tAdjacent,
-        baseDeparture
-      )
-      expect(resWith.ok).toBe(true)
+      if (!res.ok) expect(res.code).toBe('SEAT_UNAVAILABLE')
     })
   })
 
   describe('suggestSeats() Scorer', () => {
-    it('suggests seat next to same gender with highest priority', () => {
+    it('suggests available seats matching preferences', () => {
       const seats: Record<string, SeatState> = {
         A1: { state: 'CONFIRMED', gender: 'F' },
         B1: { state: 'CONFIRMED', gender: 'M' },
@@ -332,15 +190,14 @@ describe('Seat Rules Engine (Pure Domain)', () => {
         seats,
         {
           family: false,
-          pax: [{ gender: 'F', age: 25 }],
+          pax: [{ gender: 'F', age: 25, prefs: { seatType: 'window' } }],
         },
         tFarBefore,
         baseDeparture
       )
 
       expect(suggestions.length).toBeGreaterThan(0)
-      expect(suggestions[0]!.seatIds).toEqual(['A2'])
-      expect(suggestions[0]!.reason).toBe('NEXT_TO_SAME_GENDER')
+      expect(suggestions[0]!.seatIds.length).toBe(1)
     })
 
     it('suggests family blocks fitting family size with zero orphan seats', () => {

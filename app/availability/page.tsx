@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeftRight,
+  ArrowUpDown,
   ArrowRight,
   BusFront,
   CalendarDays,
@@ -21,6 +22,7 @@ import { getApiAuthHeaders } from '@/lib/firebase/client'
 import { useBookingStore } from '@/lib/booking-store'
 import { subscribeToAuth, signOutUser } from '@/lib/auth/client-auth'
 import { User } from 'firebase/auth'
+import { ThemedErrorBanner } from '@/components/ui/ThemedErrorBanner'
 
 type UserRoute = 'AHM_PUN' | 'PUN_AHM'
 
@@ -78,13 +80,49 @@ export default function AvailabilityPage() {
 
     async function loadBuses() {
       try {
-        const headers = await getApiAuthHeaders()
-        const res = await fetch(`/api/availability?route=${route}&date=${date}`, {
-          headers,
-        })
+        let res = await fetch(`/api/availability?route=${route}&date=${date}`)
+        if (!res.ok && res.status === 401) {
+          try {
+            const headers = await getApiAuthHeaders()
+            res = await fetch(`/api/availability?route=${route}&date=${date}`, { headers })
+          } catch {}
+        }
+
         if (!res.ok) {
+          // Fallback to /api/trips
+          try {
+            const fallbackRes = await fetch(`/api/trips?date=${date}&routeId=${route}`)
+            if (fallbackRes.ok) {
+              const fallbackData = await fallbackRes.json()
+              if (active && Array.isArray(fallbackData.trips) && fallbackData.trips.length > 0) {
+                setBuses(
+                  fallbackData.trips.map((t: any) => ({
+                    tripId: t.tripId || t.id,
+                    busName: t.busName || 'Uday Express 01',
+                    busType: '3+2 Seater Coach',
+                    departure: `${date}T${t.departureTime || '06:00'}:00+05:30`,
+                    arrival: `${date}T${t.arrivalTime || '08:45'}:00+05:30`,
+                    departureTime: t.departureTime || '06:00',
+                    arrivalTime: t.arrivalTime || '08:45',
+                    duration: '02h 45m',
+                    seatsLeft: typeof t.availableSeats === 'number' ? t.availableSeats : 30,
+                    totalCapacity: t.totalSeats || 50,
+                    booked: (t.bookedSeats || []).length,
+                    status: 'available',
+                    fare: t.fare || 200,
+                    seats: {},
+                  }))
+                )
+                setLoading(false)
+                return
+              }
+            }
+          } catch (fbErr) {
+            console.warn('[Availability] Fallback to /api/trips notice:', fbErr)
+          }
           throw new Error(`Failed to load: ${res.status}`)
         }
+
         const data: AvailabilityResponse = await res.json()
         if (active) {
           setBuses(data.trips || [])
@@ -94,7 +132,7 @@ export default function AvailabilityPage() {
           })
         }
       } catch (err) {
-        console.error('[Availability] Firebase load error:', err)
+        console.warn('[Availability] Handled load notice:', err)
         if (active) {
           setError(true)
           setLoading(false)
@@ -162,7 +200,6 @@ export default function AvailabilityPage() {
         )}
         {ready && !loading && !error && (
           <>
-            <ResultsSummary count={buses.length} route={route!} date={date!} />
             {buses.length ? (
               <div className="bus-list">
                 {buses.map((bus) => (
@@ -262,60 +299,87 @@ function SearchCard({
   onRoute: (route: UserRoute) => void
   onDate: (date: string) => void
 }) {
+  const isCustomDate = Boolean(date && date !== today && date !== tomorrow)
+
   return (
     <div className="search-card">
       <div className="search-step">
-        <small>STEP 1 · ROUTE</small>
+        <div className="search-step-label">
+          <span className="step-tag">STEP 1</span>
+          <span className="step-dot">·</span>
+          <span className="step-name">ROUTE</span>
+        </div>
         <div className="route-selector" role="radiogroup" aria-label="Choose route">
           <button
+            type="button"
             className={route === 'AHM_PUN' ? 'route-choice active' : 'route-choice'}
             onClick={() => onRoute('AHM_PUN')}
             role="radio"
             aria-checked={route === 'AHM_PUN'}
           >
-            <MapPin size={15} /> Ahilyanagar to Pune
+            <div className="route-choice-main">
+              <MapPin size={16} className="route-pin" />
+              <span className="route-text">Ahilyanagar to Pune</span>
+            </div>
+            <div className="route-radio-indicator">
+              <span className={`route-radio-dot ${route === 'AHM_PUN' ? 'selected' : ''}`} />
+            </div>
           </button>
+
+          <div className="swap-route-divider">
+            <span className="swap-route-line" />
+            <button
+              type="button"
+              className="swap-route"
+              onClick={() => route && onRoute(route === 'AHM_PUN' ? 'PUN_AHM' : 'AHM_PUN')}
+              disabled={!route}
+              aria-label="Swap route"
+            >
+              <ArrowUpDown size={14} />
+            </button>
+            <span className="swap-route-line" />
+          </div>
+
           <button
-            className="swap-route"
-            onClick={() => route && onRoute(route === 'AHM_PUN' ? 'PUN_AHM' : 'AHM_PUN')}
-            disabled={!route}
-            aria-label="Swap route"
-          >
-            <ArrowLeftRight size={15} />
-          </button>
-          <button
+            type="button"
             className={route === 'PUN_AHM' ? 'route-choice active' : 'route-choice'}
             onClick={() => onRoute('PUN_AHM')}
             role="radio"
             aria-checked={route === 'PUN_AHM'}
           >
-            <MapPin size={15} /> Pune to Ahilyanagar
+            <div className="route-choice-main">
+              <MapPin size={16} className="route-pin" />
+              <span className="route-text">Pune to Ahilyanagar</span>
+            </div>
+            <div className="route-radio-indicator">
+              <span className={`route-radio-dot ${route === 'PUN_AHM' ? 'selected' : ''}`} />
+            </div>
           </button>
         </div>
       </div>
       <div className={`search-step date-step ${!route ? 'disabled' : ''}`}>
-        <small>STEP 2 · DATE</small>
+        <div className="search-step-label">
+          <span className="step-tag">STEP 2</span>
+          <span className="step-dot">·</span>
+          <span className="step-name">DATE</span>
+        </div>
         <div className="date-options" role="group" aria-label="Choose date">
           <DateButton label="Today" value={today} date={date} onClick={() => onDate(today)} />
           <DateButton label="Tomorrow" value={tomorrow} date={date} onClick={() => onDate(tomorrow)} />
-          <label
-            className={
-              date && date !== today && date !== tomorrow
-                ? 'date-choice active custom-date'
-                : 'date-choice custom-date'
-            }
-          >
+          <label className={`date-choice custom-date ${isCustomDate ? 'active' : ''}`}>
             <CalendarDays size={15} />
-            <span>
-              {date && date !== today && date !== tomorrow ? formatDate(date) : 'Choose date'}
-            </span>
-            <ChevronDown size={14} />
+            <div className="custom-date-stack">
+              <strong>{isCustomDate ? 'Custom' : 'Choose'}</strong>
+              <small>{isCustomDate ? formatDate(date!) : 'date'}</small>
+            </div>
+            <ChevronDown size={13} className="custom-date-arrow" />
             <input
               type="date"
               min={today}
               max={maxDate}
-              value={date && date !== today && date !== tomorrow ? date : ''}
+              value={isCustomDate ? date! : ''}
               onChange={(event) => onDate(event.target.value)}
+              aria-label="Choose travel date"
             />
           </label>
         </div>
@@ -338,25 +402,12 @@ function DateButton({
 }) {
   return (
     <button className={date === value ? 'date-choice active' : 'date-choice'} onClick={onClick}>
-      <span>{label}</span>
+      <strong>{label}</strong>
       <small>{formatDate(value)}</small>
     </button>
   )
 }
 
-function ResultsSummary({ count, route, date }: { count: number; route: UserRoute; date: string }) {
-  return (
-    <div className="results-summary" aria-live="polite">
-      <span>
-        <b>{count} buses</b>, {route === 'AHM_PUN' ? 'Ahilyanagar to Pune' : 'Pune to Ahilyanagar'},{' '}
-        {formatDate(date)}
-      </span>
-      <em>
-        <i /> Live Firebase schedule
-      </em>
-    </div>
-  )
-}
 
 function StatusBadge({ status }: { status: string }) {
   const text =
@@ -466,11 +517,15 @@ function EmptyState({ onTomorrow }: { onTomorrow: () => void }) {
 
 function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
-    <div className="availability-idle">
-      <p>Could not load live bus schedule from Firebase</p>
-      <button className="try-button" onClick={onRetry}>
-        Retry
-      </button>
+    <div className="max-w-md mx-auto my-8 px-4">
+      <ThemedErrorBanner
+        title="Unable to Load Live Bus Schedules"
+        message="Could not retrieve available buses for this route and date from the live service."
+        suggestion="Please check your internet connection or tap retry below."
+        actionLabel="Retry Live Schedule"
+        onAction={onRetry}
+        variant="warning"
+      />
     </div>
   )
 }

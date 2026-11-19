@@ -71,4 +71,50 @@ export class TicketsRepository {
       (a, b) => new Date(b.bookedAt).getTime() - new Date(a.bookedAt).getTime()
     )
   }
+
+  /**
+   * Retrieves all confirmed or active tickets for a specific trip and travel date.
+   */
+  static async listTicketsForTrip(tripId: string, travelDate: string): Promise<TicketDoc[]> {
+    firestoreMeter.recordRead('tickets', `trip_${tripId}_${travelDate}`)
+    const db = getAdminDb()
+    const snap = await db.collection('tickets').get()
+    const list: TicketDoc[] = []
+    snap.forEach((doc) => {
+      const data = doc.data() as TicketDoc
+      if (data.tripId === tripId && data.travelDate === travelDate) {
+        list.push(data)
+      }
+    })
+    return list.sort(
+      (a, b) => new Date(b.bookedAt).getTime() - new Date(a.bookedAt).getTime()
+    )
+  }
+
+  /**
+   * Searches tickets by Ticket No / PNR, passenger mobile, or passenger name.
+   */
+  static async searchTickets(query: string): Promise<TicketDoc[]> {
+    firestoreMeter.recordRead('tickets', `search_${query}`)
+    const db = getAdminDb()
+    const snap = await db.collection('tickets').get()
+    const list: TicketDoc[] = []
+    const cleanQ = query.trim().toUpperCase()
+    if (!cleanQ) return []
+
+    snap.forEach((doc) => {
+      const data = doc.data() as TicketDoc
+      const matchesTicket = data.ticketNo?.toUpperCase().includes(cleanQ)
+      const matchesPhone = data.contactMobile?.includes(cleanQ)
+      const matchesPassenger = data.passengers?.some((p) =>
+        p.name?.toUpperCase().includes(cleanQ)
+      )
+      if (matchesTicket || matchesPhone || matchesPassenger) {
+        list.push(data)
+      }
+    })
+    return list.sort(
+      (a, b) => new Date(b.bookedAt).getTime() - new Date(a.bookedAt).getTime()
+    )
+  }
 }

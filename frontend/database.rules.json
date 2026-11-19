@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "seatState": {
+      "$tripId": {
+        ".read": true,
+        ".write": "auth != null",
+        "$seatId": {
+          ".validate": "newData.hasChildren(['status', 'updatedAt'])"
+        }
+      }
+    },
+    "tracking": {
+      "$tripId": {
+        ".read": true,
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['tripId', 'latitude', 'longitude'])"
+      }
+    }
+  }
+}

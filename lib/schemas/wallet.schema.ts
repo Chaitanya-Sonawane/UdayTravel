@@ -22,6 +22,7 @@ export type WalletDoc = z.infer<typeof WalletDocSchema>
 export const LedgerEntryTypeSchema = z.enum([
   'HOLD',
   'SPEND',
+  'BOOKING_PAYMENT',
   'HOLD_RELEASE',
   'REFUND',
   'ADMIN_CREDIT',

@@ -41,7 +41,20 @@ export async function POST(req: Request) {
     )
   }
 
-  const { grp, holdToken, useWallet, passengers, contactMobile, email, routeId, tripId, travelDate, busName } = parsed.data
+  const {
+    grp,
+    holdToken,
+    useWallet,
+    passengers,
+    contactMobile,
+    email,
+    routeId,
+    tripId,
+    travelDate,
+    busName,
+    pickup,
+    drop,
+  } = parsed.data
   const seatIds = passengers.map((p) => p.seat)
 
   try {
@@ -55,12 +68,8 @@ export async function POST(req: Request) {
         )
       }
 
-      // Check if existing order has a genuine Razorpay order ID (not a stale dev fallback)
-      const hasValidRazorpayOrder =
-        existingOrder.razorpayOrderId &&
-        !existingOrder.razorpayOrderId.startsWith('order_dev_')
-
-      if (hasValidRazorpayOrder || existingOrder.razorpayPaise === 0) {
+      // If order already has an order ID (live or test mode), return it idempotently
+      if (existingOrder.razorpayOrderId || existingOrder.razorpayPaise === 0) {
         return NextResponse.json({
           grp: existingOrder.grp,
           orderId: existingOrder.razorpayOrderId || 'INTERNAL_WALLET_ONLY',
@@ -212,6 +221,8 @@ export async function POST(req: Request) {
         age: p.age,
         gender: p.gender,
       })),
+      pickup,
+      drop,
       perSeatPaise,
       totalPaise,
       walletDebitPaise,

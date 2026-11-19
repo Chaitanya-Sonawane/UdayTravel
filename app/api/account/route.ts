@@ -112,8 +112,17 @@ export async function POST(req: Request) {
       (typeof errorObj.message === 'string' && errorObj.message.includes('ALREADY_EXISTS'))
 
     if (isAlreadyExists) {
-      // Free-tier guarantee: do not overwrite, return 200 with created: false
-      return NextResponse.json({ created: false }, { status: 200 })
+      // Free-tier guarantee: return existing profile data with 200 status
+      return NextResponse.json(
+        {
+          created: false,
+          profile: {
+            uid: auth.uid,
+            ...profileData,
+          },
+        },
+        { status: 200 }
+      )
     }
 
     console.error('[Account API] Unexpected error creating user:', err)

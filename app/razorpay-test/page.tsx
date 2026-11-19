@@ -26,7 +26,7 @@ export default function RazorpayTestPage() {
 
         <div className="bg-[#11151F] border border-white/10 rounded-xl p-6 sm:p-8 shadow-2xl">
           <div className="flex items-center gap-3 pb-6 border-b border-white/10 mb-6">
-            <div className="w-10 h-10 rounded-lg bg-[#FF9D00]/10 border border-[#FF9D00]/30 flex items-center justify-center text-[#FF9D00]">
+            <div className="w-10 h-10 rounded-lg bg-[#F8B018]/10 border border-[#F8B018]/30 flex items-center justify-center text-[#F8B018]">
               <CreditCard size={20} />
             </div>
             <div>
@@ -50,7 +50,7 @@ export default function RazorpayTestPage() {
                 step="1"
                 value={customRupees}
                 onChange={(e) => setCustomRupees(e.target.value)}
-                className="w-full bg-[#0B0F19] border border-white/15 rounded-lg px-4 py-2.5 text-white font-mono text-sm focus:border-[#FF9D00] focus:outline-none"
+                className="w-full bg-[#0B0F19] border border-white/15 rounded-lg px-4 py-2.5 text-white font-mono text-sm focus:border-[#F8B018] focus:outline-none"
               />
               <span className="text-[11px] text-white/40 mt-1 block">
                 Calculated: {amountPaise} paise (Minimum 100 paise)
@@ -65,7 +65,7 @@ export default function RazorpayTestPage() {
                 type="text"
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full bg-[#0B0F19] border border-white/15 rounded-lg px-4 py-2.5 text-white text-sm focus:border-[#FF9D00] focus:outline-none"
+                className="w-full bg-[#0B0F19] border border-white/15 rounded-lg px-4 py-2.5 text-white text-sm focus:border-[#F8B018] focus:outline-none"
               />
             </div>
 
@@ -78,7 +78,7 @@ export default function RazorpayTestPage() {
                   type="text"
                   value={customerMobile}
                   onChange={(e) => setCustomerMobile(e.target.value)}
-                  className="w-full bg-[#0B0F19] border border-white/15 rounded-lg px-4 py-2.5 text-white text-sm focus:border-[#FF9D00] focus:outline-none"
+                  className="w-full bg-[#0B0F19] border border-white/15 rounded-lg px-4 py-2.5 text-white text-sm focus:border-[#F8B018] focus:outline-none"
                 />
               </div>
               <div>
@@ -89,7 +89,7 @@ export default function RazorpayTestPage() {
                   type="email"
                   value={customerEmail}
                   onChange={(e) => setCustomerEmail(e.target.value)}
-                  className="w-full bg-[#0B0F19] border border-white/15 rounded-lg px-4 py-2.5 text-white text-sm focus:border-[#FF9D00] focus:outline-none"
+                  className="w-full bg-[#0B0F19] border border-white/15 rounded-lg px-4 py-2.5 text-white text-sm focus:border-[#F8B018] focus:outline-none"
                 />
               </div>
             </div>
@@ -102,7 +102,7 @@ export default function RazorpayTestPage() {
               customerEmail={customerEmail}
               customerMobile={customerMobile}
               description="Uday Travels - Test Payment"
-              className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-bold bg-[#FF9D00] text-[#0B0F19] hover:bg-[#e08b00] transition-all shadow-md"
+              className="w-full inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-lg font-bold bg-[#F8B018] text-[#0B0F19] hover:bg-[#e08b00] transition-all shadow-md"
               onSuccess={(data) => setLastSuccess(data)}
             />
           </div>
@@ -120,7 +120,7 @@ export default function RazorpayTestPage() {
 
           <div className="mt-6 p-3 rounded-lg bg-white/[0.03] border border-white/10 text-[11px] text-white/50 space-y-1">
             <p className="flex items-center gap-1.5 text-white/70 font-semibold">
-              <ShieldCheck size={14} className="text-[#FF9D00]" /> Flow Details:
+              <ShieldCheck size={14} className="text-[#F8B018]" /> Flow Details:
             </p>
             <p>1. Calls <code>POST /api/create-order</code> to generate Razorpay order</p>
             <p>2. Opens Razorpay Standard Checkout popup modal</p>

@@ -75,7 +75,7 @@ export async function POST(req: Request) {
       if (!isValid) {
         const isMockInDev =
           process.env.NODE_ENV !== 'production' &&
-          razorpay_signature.includes('mock_signature')
+          (razorpay_signature.includes('mock_signature') || razorpay_order_id.startsWith('order_dev_'))
         if (!isMockInDev) {
           throw new AppError(
             ErrorCodes.INVALID_SIGNATURE,

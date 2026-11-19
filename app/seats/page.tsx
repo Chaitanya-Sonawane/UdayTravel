@@ -20,6 +20,7 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { useBookingStore, type Passenger } from '@/lib/booking-store'
 import { getClientDb } from '@/lib/firebase/client'
 import { getApiAuthHeaders } from '@/lib/firebase/client'
+import { subscribeToTripSeats } from '@/lib/firebase/rtdb-client'
 import { todayIST } from '@/lib/time/ist'
 import {
   ALL_SEAT_ROWS,
@@ -27,6 +28,8 @@ import {
   Gender,
   zoneOf,
   zoneGender,
+  neighbours,
+  getActiveSeatGender,
   levelFor,
   lowestAvailableLevel,
   suggestSeats,
@@ -34,15 +37,17 @@ import {
   SeatState,
   normalizeSeats,
 } from '@/lib/domain/seats/rules'
+import { ThemedErrorBanner } from '@/components/ui/ThemedErrorBanner'
 import { SeatPublicDoc } from '@/lib/data/seats.repo'
 import { HOLD_TTL_MS } from '@/lib/config/seat-rules'
+import { getTemplateForBus } from '@/lib/domain/seats/bus-templates'
 
 const steps = ['Bus', 'Passengers', 'Seats', 'Review', 'Payment']
 
 function BookingHeader() {
   return (
     <>
-      <header className="account-header">
+      <header className="account-header sticky top-0 z-50 bg-white border-b border-gray-200 shadow-xs">
         <Link href="/passengers" className="account-back" aria-label="Back to passenger details">
           <ArrowLeft />
         </Link>
@@ -50,7 +55,6 @@ function BookingHeader() {
           <span className="page-brand-mark">UT</span>
           <span className="page-brand-name">UDAY TRAVELS</span>
         </span>
-        <span className="step-chip">3 / 5</span>
       </header>
       <nav className="booking-progress" aria-label="Booking progress">
         {steps.map((step, index) => (
@@ -70,6 +74,7 @@ export default function SeatsPage() {
     passengers,
     passengerCount,
     family,
+    toggleFamily,
     acceptAdjacent,
     setAcceptAdjacent,
     assignSeat,
@@ -100,11 +105,9 @@ export default function SeatsPage() {
   const [dismissedSuggestion, setDismissedSuggestion] = useState(false)
   const prevSuggestedSeatsRef = useRef<string[]>([])
 
-  // Level 2 Consent Dialog state
-  const [pendingConsentSeat, setPendingConsentSeat] = useState<string | null>(null)
-
   // Hold Timer state
   const [holdTimerSeconds, setHoldTimerSeconds] = useState<number | null>(null)
+  const [myHeldSeatIds, setMyHeldSeatIds] = useState<string[]>([])
 
   const activePassenger =
     passengers.find((p) => p.id === activePassengerId) ??
@@ -118,18 +121,54 @@ export default function SeatsPage() {
   const searchParamsRef = useRef<{ route: string; date: string; tripId: string }>({
     route: 'AHM_PUN',
     date: todayIST(),
-    tripId: '',
+    tripId: 'AHM_PUN_0600',
   })
 
+  const busTemplate = useMemo(() => {
+    return getTemplateForBus(journey.busName || journey.busId || journey.tripId || searchParamsRef.current.tripId)
+  }, [journey.busName, journey.busId, journey.tripId])
+
   // 1. Initial metadata fetch & Firestore Realtime Subscription (onSnapshot on seat_public)
+  const routeProp = journey.routeId || 'AHM_PUN'
+  const dateProp = journey.date || todayIST()
+  const tripIdProp = journey.tripId || 'AHM_PUN_0600'
+
   useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search)
-    const route = searchParams.get('route') || journey.routeId || 'AHM_PUN'
-    const date = searchParams.get('date') || journey.date || todayIST()
-    const tripId = searchParams.get('tripId') || journey.tripId || ''
+    let route = routeProp
+    let date = dateProp
+    let tripId = tripIdProp
+
+    if (typeof window !== 'undefined') {
+      const searchParams = new URLSearchParams(window.location.search)
+      route = searchParams.get('route') || routeProp || 'AHM_PUN'
+      date = searchParams.get('date') || dateProp || todayIST()
+      tripId = searchParams.get('tripId') || tripIdProp || 'AHM_PUN_0600'
+    }
+
     searchParamsRef.current = { route, date, tripId }
 
     let active = true
+    let unsubscribeFn: (() => void) | null = null
+    let pollInterval: NodeJS.Timeout | null = null
+
+    // Resilient fallback polling keeps seat map perfectly live if client stream drops or errors
+    const startFallbackPolling = () => {
+      if (pollInterval) return
+      pollInterval = setInterval(async () => {
+        if (!active) return
+        try {
+          const res = await fetch(`/api/seats?route=${route}&date=${date}&tripId=${tripId}`)
+          if (res.ok) {
+            const data = await res.json()
+            if (active && data?.publicMap) {
+              setPublicDoc(data.publicMap)
+            }
+          }
+        } catch {
+          // ignore transient background poll failure
+        }
+      }, 3000)
+    }
 
     // Fetch trip metadata from /api/seats
     async function loadTripMeta() {
@@ -145,13 +184,16 @@ export default function SeatsPage() {
             routeId: route,
             date,
             tripId,
-            busName: data.busName || journey.busName || 'Uday Express',
-            departure: data.departureTime || journey.departure || '06:00',
-            arrival: data.arrivalTime || journey.arrival || '08:45',
-            fare: data.fare || journey.fare || 200,
+            busName: data.busName || 'Uday Express',
+            departure: data.departureTime || '06:00',
+            arrival: data.arrivalTime || '08:45',
+            fare: data.fare || 200,
           })
           if (data.publicMap) {
             setPublicDoc(data.publicMap)
+          }
+          if (Array.isArray(data.myHeldSeats)) {
+            setMyHeldSeatIds(data.myHeldSeats)
           }
         }
       } catch (err) {
@@ -170,8 +212,9 @@ export default function SeatsPage() {
         const db = getClientDb()
         const seatPublicRef = doc(db, 'seat_public', docId)
 
-        const unsubscribe = onSnapshot(
+        unsubscribeFn = onSnapshot(
           seatPublicRef,
+          { includeMetadataChanges: false },
           (snapshot) => {
             if (active && snapshot.exists()) {
               const data = snapshot.data() as SeatPublicDoc
@@ -180,23 +223,110 @@ export default function SeatsPage() {
             }
           },
           (err) => {
-            console.warn('[Seats] onSnapshot notice:', err)
+            console.warn('[Seats] onSnapshot notice, fallback polling engaged:', err?.message || err)
+            startFallbackPolling()
           }
         )
-
-        return () => {
-          active = false
-          unsubscribe()
-        }
       } catch (err) {
-        console.warn('[Seats] Firestore onSnapshot setup error:', err)
+        console.warn('[Seats] Firestore onSnapshot setup error, fallback polling engaged:', err)
+        startFallbackPolling()
       }
+    } else {
+      startFallbackPolling()
+    }
+
+    // 2. Realtime Database High-Frequency Seat Synchronization
+    let rtdbUnsub: (() => void) | null = null
+    try {
+      rtdbUnsub = subscribeToTripSeats(tripId, (rtdbSeats) => {
+        if (!active || !rtdbSeats) return
+        setPublicDoc((prev) => {
+          const updatedTaken = { ...prev.taken }
+          const updatedHeld = { ...prev.held }
+          const now = Date.now()
+
+          for (const [sId, sData] of Object.entries(rtdbSeats)) {
+            if (sData.status === 'booked') {
+              updatedTaken[sId] = sData.gender?.startsWith('F') || sData.gender === 'woman' ? 'F' : 'M'
+              delete updatedHeld[sId]
+            } else if (sData.status === 'held' && sData.holdUntil && sData.holdUntil > now) {
+              updatedHeld[sId] = {
+                gender: sData.gender?.startsWith('F') || sData.gender === 'woman' ? 'F' : 'M',
+                expiresAt: sData.holdUntil,
+              }
+            } else if (sData.status === 'available') {
+              delete updatedHeld[sId]
+            }
+          }
+
+          return {
+            ...prev,
+            taken: updatedTaken,
+            held: updatedHeld,
+          }
+        })
+      })
+    } catch (rtdbErr) {
+      console.warn('[Seats] RTDB subscription warning:', rtdbErr)
+    }
+
+    // Suppress unhandled internal Firestore assertion error ID: ca9
+    const handleGlobalError = (event: ErrorEvent) => {
+      const msg = event?.message || ''
+      if (
+        msg.includes('INTERNAL ASSERTION FAILED') ||
+        msg.includes('ID: ca9') ||
+        msg.includes('WatchChangeAggregator')
+      ) {
+        event.preventDefault()
+        event.stopPropagation()
+        console.warn('[Firestore] Suppressed watch-change assertion (ID: ca9). Fallback polling active.')
+        startFallbackPolling()
+      }
+    }
+
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event?.reason?.message || String(event?.reason || '')
+      if (
+        reason.includes('INTERNAL ASSERTION FAILED') ||
+        reason.includes('ID: ca9') ||
+        reason.includes('WatchChangeAggregator')
+      ) {
+        event.preventDefault()
+        event.stopPropagation()
+        console.warn('[Firestore] Suppressed watch-change promise rejection (ID: ca9). Fallback polling active.')
+        startFallbackPolling()
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', handleGlobalError)
+      window.addEventListener('unhandledrejection', handleUnhandledRejection)
     }
 
     return () => {
       active = false
+      if (pollInterval) clearInterval(pollInterval)
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('error', handleGlobalError)
+        window.removeEventListener('unhandledrejection', handleUnhandledRejection)
+      }
+      if (unsubscribeFn) {
+        try {
+          unsubscribeFn()
+        } catch {
+          // safe catch during fast unmount
+        }
+      }
+      if (rtdbUnsub) {
+        try {
+          rtdbUnsub()
+        } catch {
+          // safe catch
+        }
+      }
     }
-  }, [journey.routeId, journey.date, journey.tripId, setJourney])
+  }, [routeProp, dateProp, tripIdProp])
 
   // Convert publicDoc to normalized map for rules engine
   const normalizedSeatsMap = useMemo(() => {
@@ -278,7 +408,20 @@ export default function SeatsPage() {
     if (!activePassenger) return
 
     const now = Date.now()
-    const entry = normalizedSeatsMap[seatId]
+
+    // Build effective map incorporating currently selected seats of other passengers
+    const effectiveMap = { ...normalizedSeatsMap }
+    for (const p of passengers) {
+      if (p.seatId && p.id !== activePassenger.id) {
+        effectiveMap[p.seatId] = {
+          state: 'HELD',
+          gender: (p.gender === 'woman' ? 'F' : 'M') as Gender,
+          holdExpiresAt: now + 600000,
+        }
+      }
+    }
+
+    const entry = effectiveMap[seatId]
 
     // 1. Is seat taken or blocked?
     if (entry && (entry.state === 'CONFIRMED' || entry.state === 'BLOCKED')) {
@@ -286,34 +429,18 @@ export default function SeatsPage() {
       return
     }
     if (entry && entry.state === 'HELD' && entry.holdExpiresAt && entry.holdExpiresAt > now) {
-      showToast(`Seat ${seatId} is currently held by another traveller.`)
-      return
-    }
-
-    // 2. Ladder check
-    const lvl = levelFor(normalizedSeatsMap, seatId, activeGender, now, departureTimestamp)
-    const minLvl = lowestAvailableLevel(normalizedSeatsMap, activeGender, now, departureTimestamp)
-
-    // Locked for other gender
-    if (lvl === null) {
-      const z = zoneOf(seatId)
-      const zg = zoneGender(normalizedSeatsMap, z, now)
-      if (zg && zg !== activeGender) {
+      const isMyHold = myHeldSeatIds.includes(seatId)
+      const otherPax = passengers.find((p) => p.seatId === seatId && p.id !== activePassenger.id)
+      if (otherPax) {
         showToast(
-          `Seat ${seatId} is in a ${
-            zg === 'F' ? 'Women' : 'Men'
-          } zone. Strangers of the other gender cannot sit here.`
+          `Seat ${seatId} is already assigned to ${otherPax.name || 'another passenger in your booking'}.`
         )
-      } else {
-        showToast(`Seat ${seatId} cannot be selected due to gender distance rules.`)
+        return
       }
-      return
-    }
-
-    // If level is 2: requires explicit consent
-    if (lvl === 2 && !acceptAdjacent) {
-      setPendingConsentSeat(seatId)
-      return
+      if (!isMyHold) {
+        showToast(`Seat ${seatId} is currently held by another traveller.`)
+        return
+      }
     }
 
     // Assign seat to active passenger
@@ -358,7 +485,7 @@ export default function SeatsPage() {
       const payload = {
         routeId: searchParamsRef.current.route || 'AHM_PUN',
         date: searchParamsRef.current.date || todayIST(),
-        tripId: searchParamsRef.current.tripId,
+        tripId: searchParamsRef.current.tripId || 'AHM_PUN_0600',
         family,
         acceptAdjacent,
         passengers: passengers.map((p) => ({
@@ -381,16 +508,15 @@ export default function SeatsPage() {
         if (data.error?.details?.freshMap) {
           setPublicDoc(data.error.details.freshMap)
         }
-        if (data.error?.code === 'ADJACENT_CONSENT_REQUIRED') {
-          setPendingConsentSeat(data.error.details?.seatId || selectedSeats[0])
-          return
-        }
         throw new Error(data.error?.message || 'Seat just taken, please re-pick.')
       }
 
+      if (Array.isArray(data.seatIds)) {
+        setMyHeldSeatIds(data.seatIds)
+      }
       setHold(data.grp, data.holdToken, data.holdExpiresAt)
       startHold()
-      router.push('/review')
+      router.push('/booking/summary')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to hold seats'
       setError(msg)
@@ -405,39 +531,42 @@ export default function SeatsPage() {
     const assignedPassenger = passengers.find((p) => p.seatId === seatId)
     const now = Date.now()
 
-    const entry = normalizedSeatsMap[seatId]
+    // Build effective map for active passenger incorporating other chosen seats
+    const effectiveMap = { ...normalizedSeatsMap }
+    for (const p of passengers) {
+      if (p.seatId && p.id !== activePassenger?.id) {
+        effectiveMap[p.seatId] = {
+          state: 'HELD',
+          gender: (p.gender === 'woman' ? 'F' : 'M') as Gender,
+          holdExpiresAt: now + 600000,
+        }
+      }
+    }
+
+    const entry = effectiveMap[seatId]
+    const isMyHold = myHeldSeatIds.includes(seatId)
     const isOccupied =
       entry &&
       (entry.state === 'CONFIRMED' ||
         entry.state === 'BLOCKED' ||
-        (entry.state === 'HELD' && entry.holdExpiresAt && entry.holdExpiresAt > now))
+        (entry.state === 'HELD' &&
+          entry.holdExpiresAt &&
+          entry.holdExpiresAt > now &&
+          !isMyHold &&
+          !passengers.some((p) => p.seatId === seatId && p.id === activePassenger?.id)))
 
     const isSuggested =
       topSuggestion && !dismissedSuggestion && topSuggestion.seatIds.includes(seatId)
 
     // Determine status class
     let colorClass = 'open'
-    let isLocked = false
 
     if (isSelected) {
       colorClass = 'is-selected'
     } else if (isOccupied) {
       colorClass = 'taken'
     } else {
-      const z = zoneOf(seatId)
-      const zg = zoneGender(normalizedSeatsMap, z, now)
-      const lvl = levelFor(normalizedSeatsMap, seatId, activeGender, now, departureTimestamp)
-
-      if (lvl === null) {
-        isLocked = true
-        colorClass = 'locked'
-      } else if (zg === 'F') {
-        colorClass = 'pink'
-      } else if (zg === 'M') {
-        colorClass = 'blue'
-      } else {
-        colorClass = 'open'
-      }
+      colorClass = 'open'
     }
 
     const classes = [
@@ -460,16 +589,12 @@ export default function SeatsPage() {
             ? `Assigned to ${assignedPassenger?.name || 'passenger'}`
             : isOccupied
             ? 'Taken'
-            : isLocked
-            ? 'Reserved for opposite gender'
             : 'Available'
         }`}
         aria-pressed={isSelected}
       >
         {isSelected ? (
           <Check size={17} strokeWidth={3} className="text-gray-900" />
-        ) : isLocked ? (
-          <Lock size={13} className="opacity-60 text-gray-400" />
         ) : null}
       </button>
     )
@@ -482,11 +607,8 @@ export default function SeatsPage() {
       <section className="booking-shell">
         <div className="booking-intro">
           <p>SEAT SELECTION</p>
-          <h1>Choose your seats</h1>
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <small>
-              {journey.busName} · {journey.from} → {journey.to}
-            </small>
+            <h1>Choose your seats</h1>
 
             {holdTimerSeconds !== null && (
               <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900 bg-amber-100 px-2.5 py-1 rounded-full border border-amber-300 animate-pulse">
@@ -579,10 +701,7 @@ export default function SeatsPage() {
             <p className="flow-assignment-hint">
               {activePassenger ? (
                 <span>
-                  Map is customized for{' '}
-                  <b>{activePassenger.name || 'Passenger'}</b> (
-                  {activePassenger.gender === 'woman' ? 'Woman' : 'Man'}). Free seats in other
-                  gender zones are locked.
+                  Select an available seat for <b>{activePassenger.name || 'Passenger'}</b>.
                 </span>
               ) : (
                 'Select a passenger chip above to assign their seat.'
@@ -594,73 +713,51 @@ export default function SeatsPage() {
             <CircleGauge size={24} aria-hidden="true" />
             <span>Front / Driver</span>
             {loadingPublicMap && (
-              <span className="ml-auto flex items-center gap-1 text-xs text-[#FF9D00]">
+              <span className="ml-auto flex items-center gap-1 text-xs text-[#F8B018]">
                 <Loader2 size={12} className="animate-spin" /> Syncing live map...
               </span>
             )}
           </div>
 
-          {/* Seat Grid: Rows A-J, 2 Left + 3 Right */}
+          {/* Seat Grid matching Fleet Bus Template */}
           <div className="flow-seat-map" role="group" aria-label="Choose bus seats">
-            <div className="flow-seat-head">
-              <span />
-              {[1, 2].map((num) => (
-                <b key={`left-${num}`}>{num}</b>
-              ))}
-              <span />
-              {[3, 4, 5].map((num) => (
-                <b key={`right-${num}`}>{num}</b>
-              ))}
-            </div>
+            {busTemplate.frontSeats.length > 0 && (
+              <div className="flow-seat-row justify-end mb-2 pr-1">
+                <span className="text-[10px] text-gray-400 font-semibold mr-2 self-center">Front:</span>
+                {busTemplate.frontSeats.map((sId) => renderSeatButton(sId))}
+              </div>
+            )}
 
-            {ALL_SEAT_ROWS.map((row) => (
-              <div className="flow-seat-row" key={row}>
-                <b className="flow-seat-label">{row}</b>
-                {renderSeatButton(`${row}1`)}
-                {renderSeatButton(`${row}2`)}
+            {busTemplate.rows.map((row) => (
+              <div className="flow-seat-row" key={row.rowLabel}>
+                <b className="flow-seat-label">{row.rowLabel}</b>
+                {row.leftSeats.map((sId) => renderSeatButton(sId))}
                 <span className="flow-seat-aisle" aria-hidden="true" />
-                {renderSeatButton(`${row}3`)}
-                {renderSeatButton(`${row}4`)}
-                {renderSeatButton(`${row}5`)}
+                {row.rightSeats.map((sId) => renderSeatButton(sId))}
               </div>
             ))}
+
+            {busTemplate.rearBench.length > 0 && (
+              <div className="flow-seat-row justify-center mt-2 pt-2 border-t border-gray-100">
+                <span className="text-[10px] text-gray-400 font-semibold mr-2 self-center">Back:</span>
+                {busTemplate.rearBench.map((sId) => renderSeatButton(sId))}
+              </div>
+            )}
           </div>
 
           {/* Rules Legend */}
           <div className="flow-seat-legend">
             <span>
               <i className="available" style={{ background: '#FFFFFF', borderColor: '#D1D5DB' }} />
-              Open
+              Available
             </span>
             <span>
-              <i style={{ background: '#FFF0F6', borderColor: '#F3A2C4' }} />
-              Women
-            </span>
-            <span>
-              <i style={{ background: '#EFF6FF', borderColor: '#93C5FD' }} />
-              Men
-            </span>
-            <span>
-              <i
-                style={{
-                  background: '#F3F4F6',
-                  borderColor: '#E5E7EB',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Lock size={10} className="text-gray-400" />
-              </i>
-              Reserved
-            </span>
-            <span>
-              <i style={{ background: '#4B5563', borderColor: '#374151' }} />
-              Booked
-            </span>
-            <span>
-              <i style={{ background: '#FFB21A', borderColor: '#E89A00' }} />
+              <i style={{ background: '#F8B018', borderColor: '#F8B018' }} />
               Selected
+            </span>
+            <span>
+              <i style={{ background: '#9CA3AF', borderColor: '#6B7280' }} />
+              Booked
             </span>
           </div>
 
@@ -691,9 +788,15 @@ export default function SeatsPage() {
           </button>
 
           {error && (
-            <p className="inline-error" role="alert">
-              ! {error}
-            </p>
+            <div className="my-2">
+              <ThemedErrorBanner
+                title="Seat Selection Notice"
+                message={error}
+                onDismiss={() => setError('')}
+                variant="warning"
+                compact
+              />
+            </div>
           )}
         </section>
       </section>
@@ -704,58 +807,8 @@ export default function SeatsPage() {
           role="status"
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2 text-xs font-semibold max-w-sm text-center animate-in fade-in slide-in-from-bottom-3 duration-200"
         >
-          <Info size={16} className="text-[#FF9D00] flex-shrink-0" />
+          <Info size={16} className="text-[#F8B018] flex-shrink-0" />
           <span>{toastMessage}</span>
-        </div>
-      )}
-
-      {/* Level 2 Adjacent Consent Dialog */}
-      {pendingConsentSeat && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
-            <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mb-3">
-              <AlertTriangle size={20} />
-            </div>
-
-            <h3 className="text-base font-bold text-gray-900 mb-1.5">
-              Adjacent Seating Confirmation
-            </h3>
-
-            <p className="text-xs text-gray-600 leading-relaxed mb-4">
-              All strict same-gender seats have been filled. The remaining seats on this coach are
-              adjacent to a {activeGender === 'F' ? 'male' : 'female'} passenger. Would you like to
-              proceed with seat <strong>{pendingConsentSeat}</strong>?
-            </p>
-
-            <div className="flex gap-2.5">
-              <button
-                type="button"
-                onClick={() => setPendingConsentSeat(null)}
-                className="flex-1 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Choose another seat
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setAcceptAdjacent(true)
-                  if (activePassenger && pendingConsentSeat) {
-                    assignSeat(activePassenger.id, pendingConsentSeat)
-                  }
-                  setPendingConsentSeat(null)
-                  showToast(`Seat ${pendingConsentSeat} selected with consent.`)
-                }}
-                className="flex-1 py-2 text-xs font-bold text-white bg-[#FF9D00] hover:bg-[#e08b00] rounded-lg transition-colors shadow-sm"
-              >
-                Yes, continue
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </main>

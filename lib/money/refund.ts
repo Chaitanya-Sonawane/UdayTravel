@@ -1,5 +1,6 @@
 import { AppError, ErrorCodes } from '../errors/app-error'
 import { validatePaise } from './index'
+import { calculateCancellationTimeline } from '../time/cancellation-format'
 
 export const CANCELLATION_FEE_PER_SEAT_PAISE = 5000 // ₹50.00 in paise
 
@@ -14,24 +15,47 @@ export interface RefundBreakdown {
 
 /**
  * Checks whether cancellation is permissible according to route policy and cutoff window in IST.
- * - Ahilyanagar -> Pune (AHM_PUN): Allowed until 20:00 IST on the day before travel date.
- * - Pune -> Ahilyanagar (PUN_AHM): Allowed until 20:00 IST on the day before travel date;
- *   additionally, cannot be cancelled on the same day if booked on that travel day.
+ * - When departureTime is specified: Evaluates exact 2-hour departure cutoff in IST, in perfect sync with UI countdown.
+ * - When departureTime is omitted: Legacy fallback checking 20:00 IST the day before travel.
  */
 export function isCancellationAllowed(params: {
   routeId: string
   travelDate: string // YYYY-MM-DD
+  departureTime?: string
   bookedAtIso?: string
   now?: Date
+  allowAdminOverride?: boolean
 }): { allowed: boolean; reason?: string } {
-  const { routeId, travelDate, bookedAtIso, now = new Date() } = params
+  const { routeId, travelDate, departureTime, bookedAtIso, now = new Date(), allowAdminOverride } = params
+
+  if (allowAdminOverride) {
+    return { allowed: true }
+  }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(travelDate)) {
     return { allowed: false, reason: 'Invalid travel date format' }
   }
 
-  // Parse travel date in IST
-  // Travel date start: YYYY-MM-DDT00:00:00+05:30
+  // 1. Live Departure Cutoff (2 hours before departure in IST) matching the frontend modal
+  if (departureTime) {
+    const timeline = calculateCancellationTimeline({
+      travelDate,
+      departureTime,
+      cutoffHours: 2,
+      now,
+    })
+
+    if (timeline.isClosed) {
+      return {
+        allowed: false,
+        reason: `Cancellation window is closed (Cutoff was ${timeline.cutoffTime12h}, 2 hours before departure)`,
+      }
+    }
+
+    return { allowed: true }
+  }
+
+  // 2. Legacy fallback when departureTime is omitted
   const travelDateObj = new Date(`${travelDate}T00:00:00+05:30`)
   if (isNaN(travelDateObj.getTime())) {
     return { allowed: false, reason: 'Invalid travel date' }

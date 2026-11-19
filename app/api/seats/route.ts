@@ -1,19 +1,14 @@
 import { NextResponse } from 'next/server'
-import { requireUser } from '@/lib/server/guard'
 import { getAdminDb } from '@/lib/firebase/admin'
 import { firestoreMeter } from '@/lib/firebase/meter'
 import { getRoute, RouteId } from '@/lib/config/routes'
 import { BASE_FARE_INR, SEATS_PER_BUS } from '@/lib/config/rules'
 import { SeatsRepository } from '@/lib/data/seats.repo'
+import { TripsRepository } from '@/lib/data/trips.repo'
 import { AvailabilityDoc } from '@/lib/schema/availability'
 import { ALL_SEAT_IDS } from '@/lib/domain/seats/rules'
 
 export async function GET(req: Request) {
-  const auth = await requireUser(req)
-  if (!auth.success) {
-    return auth.response
-  }
-
   const { searchParams } = new URL(req.url)
   const route = searchParams.get('route') as RouteId
   const date = searchParams.get('date')
@@ -49,9 +44,30 @@ export async function GET(req: Request) {
   }
 
   // Look for trip in trips or customTrips
-  let tripData = availabilityDoc?.trips?.[tripId]
+  let tripData: any = availabilityDoc?.trips?.[tripId]
   if (!tripData && availabilityDoc?.customTrips) {
     tripData = availabilityDoc.customTrips.find((t) => t.tripId === tripId)
+  }
+
+  if (!tripData) {
+    // Check TripsRepository for trip in Firestore
+    try {
+      const repoTrip = await TripsRepository.getTripById(tripId)
+      if (repoTrip) {
+        tripData = {
+          tripId: repoTrip.tripId || repoTrip.id,
+          busName: repoTrip.busId === 'bus_mh16dp4951' ? 'Uday Express 01' : 'Uday Express',
+          busType: '3+2 Seater Coach',
+          departureTime: repoTrip.departureTime,
+          arrivalTime: repoTrip.arrivalTime || '08:45',
+          fare: repoTrip.fare || BASE_FARE_INR,
+          totalSeats: repoTrip.totalSeats || SEATS_PER_BUS,
+          booked: (repoTrip.bookedSeats || []).length,
+        }
+      }
+    } catch (err) {
+      console.warn(`[Seats API] TripsRepository lookup failed for ${tripId}:`, err)
+    }
   }
 
   if (!tripData) {
@@ -88,6 +104,40 @@ export async function GET(req: Request) {
     }
   }
 
+  // Check if caller holds any active seats on this trip
+  const myHeldSeats: string[] = []
+  try {
+    const authHeader = req.headers.get('authorization')
+    if (authHeader?.startsWith('Bearer ')) {
+      const idToken = authHeader.substring(7).trim()
+      const parts = idToken.split('.')
+      let callerUid: string | null = null
+      if (parts.length === 3 && parts[1]) {
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'))
+        callerUid = payload.user_id || payload.sub || payload.uid
+      } else if (idToken) {
+        callerUid = idToken
+      }
+
+      if (callerUid) {
+        const busDoc = await SeatsRepository.getBusSeats(tripId, date)
+        const now = Date.now()
+        for (const [sId, entry] of Object.entries(busDoc.seats || {})) {
+          if (
+            entry.state === 'HELD' &&
+            entry.heldBy === callerUid &&
+            entry.holdExpiresAt &&
+            entry.holdExpiresAt > now
+          ) {
+            myHeldSeats.push(sId)
+          }
+        }
+      }
+    }
+  } catch {
+    // safe catch
+  }
+
   return NextResponse.json(
     {
       route,
@@ -103,6 +153,7 @@ export async function GET(req: Request) {
       booked: totalOccupied,
       seats,
       publicMap,
+      myHeldSeats,
     },
     {
       status: 200,

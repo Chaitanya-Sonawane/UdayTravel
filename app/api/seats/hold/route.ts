@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   try {
     const holdResult = await placeSeatHold({
       uid: auth.uid,
-      routeId: parsed.data.routeId,
+      routeId: parsed.data.routeId as any,
       date: parsed.data.date,
       tripId: parsed.data.tripId,
       seatIds: parsed.data.seatIds,

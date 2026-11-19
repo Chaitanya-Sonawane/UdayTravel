@@ -1,14 +1,13 @@
 {
-  "name": "my-project",
+  "name": "united18-stock",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@12.3.4",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3005",
     "build": "next build",
-    "start": "next start",
-    "test": "vitest run",
-    "clean:data": "tsx scripts/clean-dummy-data.ts"
+    "start": "next start -p 3005",
+    "test": "node_modules/.bin/vitest run"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -22,6 +21,7 @@
     "firebase-admin": "^14.5.1",
     "lucide-react": "^1.16.0",
     "next": "16.4.5",
+    "qrcode": "^1.5.4",
     "qrcode.react": "^4.2.0",
     "razorpay": "^2.9.8",
     "react": "^19",
@@ -36,12 +36,20 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "fast-check": "^4.10.2",
     "postcss": "^8.5",
+    "puppeteer": "^25.17.0",
     "tailwindcss": "^4.3.3",
     "typescript": "5.7.3",
     "vitest": "^5.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "puppeteer",
+      "@protobufjs/utf8"
+    ]
   }
 }

@@ -1,0 +1,117 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Deny all writes from client by default across all collections
+    // Routes collection: client read allowed; writes strictly admin/server
+    match /routes/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Buses collection: client read allowed; writes strictly admin/server
+    match /buses/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Trips collection: client read allowed; writes strictly admin/server
+    match /trips/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Bookings collection: client can read their own bookings; writes strictly server-side
+    match /bookings/{bookingId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Settings collection: client read allowed for business settings; writes strictly admin/server
+    match /settings/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Admins collection: server only
+    match /admins/{uid} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Users collection: client may read only their own profile; all client writes denied.
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Availability collection: client read allowed for bus schedules; writes strictly denied
+    match /availability/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Bus seats collection: authoritative server-only
+    match /bus_seats/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Seat public collection: client-readable sanitized seat map; writes denied
+    match /seat_public/{document=**} {
+      allow read: if request.auth != null || true;
+      allow write: if false;
+    }
+
+    // Tickets collection: client can read their own ticket; writes strictly server-side
+    match /tickets/{ticketNo} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Wallets and Wallet Ledger: client can read only their own store credit balance & ledger; writes strictly server-side
+    match /wallets/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+
+      match /ledger/{entryId} {
+        allow read: if request.auth != null && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    // Refunds: client can read their own refund status; writes strictly server-side
+    match /refunds/{ticketNo} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+
+    // Orders, Payments, Webhook Events, and Audit Logs: strictly server-only (Admin SDK)
+    match /orders/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /payments/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /webhook_events/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    match /audit_logs/{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // Default deny for everything else
+    match /{document=**} {
+      allow read: if false;
+      allow write: if false;
+    }
+  }
+}

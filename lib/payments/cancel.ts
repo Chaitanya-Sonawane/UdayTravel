@@ -5,7 +5,11 @@ import { SeatsRepository } from '../data/seats.repo'
 import { AvailabilityRepository } from '../data/availability.repo'
 import { WalletsRepository } from '../data/wallets.repo'
 import { RefundsRepository } from '../data/refunds.repo'
+import { BookingsRepository } from '../data/bookings.repo'
+import { TripsRepository } from '../data/trips.repo'
+import { cancelSeatsInRtdb } from '../firebase/rtdb'
 import { isCancellationAllowed, computeRefund, RefundBreakdown } from '../money/refund'
+import { compute2575Refund } from '../time/cancellation-format'
 import { RefundDoc, TicketDoc } from '../schemas/ticket.schema'
 import { notifySeatChartUpdate } from '../server/realtime-bus'
 import { issueRefund } from './refund'
@@ -50,11 +54,20 @@ export async function cancelBooking(
     )
   }
 
+  // Resolve departure time from ticket pickup or trip ID
+  const departureTime =
+    ticket.pickup?.pickupTime ||
+    ticket.pickup?.time ||
+    (ticket.tripId ? ticket.tripId.split('_')[2] : undefined) ||
+    '06:00'
+
   // Cancellation policy check in IST
   const policyCheck = isCancellationAllowed({
     routeId: ticket.route.routeId,
     travelDate: ticket.travelDate,
+    departureTime,
     bookedAtIso: ticket.bookedAt,
+    allowAdminOverride: callerUid === 'admin',
   })
 
   if (!policyCheck.allowed) {
@@ -64,8 +77,8 @@ export async function cancelBooking(
     )
   }
 
-  // Anonymous user check: if user is anonymous, wallet store credit cannot be retained
-  if (isAnonymous && callerUid !== 'admin') {
+  // Anonymous user check: in production strict mode without verified contact mobile
+  if (isAnonymous && callerUid !== 'admin' && process.env.NODE_ENV === 'production' && !ticket.contactMobile) {
     throw new AppError(
       ErrorCodes.ACCOUNT_LINK_REQUIRED,
       'Please sign in or link your phone number to cancel and receive your refund'
@@ -73,12 +86,25 @@ export async function cancelBooking(
   }
 
   // Compute refund
-  const refundBreakdown = computeRefund({
-    totalPaidPaise: ticket.fare.totalPaise,
-    seatCount: ticket.fare.seats,
-    sourcePaidPaise: ticket.payment.razorpayPaise,
-    walletPaidPaise: ticket.payment.walletDebitPaise,
-  })
+  let refundBreakdown: RefundBreakdown
+  if (ticket.payment.walletDebitPaise === 0 && ticket.payment.razorpayPaise > 0) {
+    const split = compute2575Refund(ticket.fare.totalPaise)
+    refundBreakdown = {
+      totalPaidPaise: ticket.fare.totalPaise,
+      feePaise: 0,
+      netRefundPaise: ticket.fare.totalPaise,
+      sourceRefundPaise: split.sourceRefundPaise,
+      walletRefundPaise: split.walletCreditPaise,
+      seatCount: ticket.fare.seats,
+    }
+  } else {
+    refundBreakdown = computeRefund({
+      totalPaidPaise: ticket.fare.totalPaise,
+      seatCount: ticket.fare.seats,
+      sourcePaidPaise: ticket.payment.razorpayPaise,
+      walletPaidPaise: ticket.payment.walletDebitPaise,
+    })
+  }
 
   const nowIso = new Date().toISOString()
   let createdRefundDoc: RefundDoc | undefined
@@ -144,6 +170,29 @@ export async function cancelBooking(
       cancelledAt: nowIso,
     })
   })
+
+  const seatIds = ticket.passengers.map((p) => p.seat)
+
+  // Update Bookings collection
+  try {
+    await BookingsRepository.updateBookingStatus(ticket.grp, 'cancelled')
+  } catch (bErr) {
+    console.warn('[cancelBooking] Booking update warning:', bErr)
+  }
+
+  // Update Trips collection
+  try {
+    await TripsRepository.recordCancellationInTrip(ticket.tripId, ticket.fare.seats, seatIds)
+  } catch (tErr) {
+    console.warn('[cancelBooking] Trip record warning:', tErr)
+  }
+
+  // Update Firebase Realtime Database live seat states
+  try {
+    await cancelSeatsInRtdb({ tripId: ticket.tripId, seatIds })
+  } catch (rErr) {
+    console.warn('[cancelBooking] RTDB release warning:', rErr)
+  }
 
   // Post-transaction external calls:
   // If external source refund is pending and payment ID exists, trigger external Razorpay refund

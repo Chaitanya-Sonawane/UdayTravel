@@ -26,6 +26,33 @@ describe('Refund & Cancellation Policy Engine', () => {
       expect(check.reason).toContain('closed')
     })
 
+    it('allows cancellation for same-day travel if departureTime is > 2 hours away', () => {
+      const travelDate = '2026-11-18'
+      const departureTime = '18:30' // 06:30 PM
+      const now = new Date('2026-11-18T13:00:00+05:30') // 1:00 PM (5.5 hrs before departure)
+      const check = isCancellationAllowed({
+        routeId: 'PUN_AHM',
+        travelDate,
+        departureTime,
+        now,
+      })
+      expect(check.allowed).toBe(true)
+    })
+
+    it('rejects cancellation for same-day travel if within 2 hours of departure', () => {
+      const travelDate = '2026-11-18'
+      const departureTime = '18:30'
+      const now = new Date('2026-11-18T17:00:00+05:30') // 5:00 PM (1.5 hrs before departure)
+      const check = isCancellationAllowed({
+        routeId: 'PUN_AHM',
+        travelDate,
+        departureTime,
+        now,
+      })
+      expect(check.allowed).toBe(false)
+      expect(check.reason).toContain('closed')
+    })
+
     it('rejects cancellation for PUN_AHM on travel day if booked on same day', () => {
       const travelDate = '2026-11-20'
       const bookedAtIso = '2026-11-20T08:00:00+05:30'

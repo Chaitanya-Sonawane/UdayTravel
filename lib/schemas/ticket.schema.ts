@@ -28,7 +28,7 @@ export const TicketDocSchema = z.object({
   route: z.object({
     from: z.string(),
     to: z.string(),
-    routeId: z.enum(['AHM_PUN', 'PUN_AHM']),
+    routeId: z.string(),
   }),
   travelDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   tripId: z.string(),
@@ -36,12 +36,15 @@ export const TicketDocSchema = z.object({
   busNumber: z.string(),
   seatLayout: z.string().default('3+2 Seater'),
   pickup: z.object({
+    pointId: z.string().optional(),
     name: z.string(),
-    time: z.string(),
+    time: z.string().optional(),
+    pickupTime: z.string().optional(),
   }),
   drop: z.object({
+    pointId: z.string().optional(),
     name: z.string(),
-    time: z.string(),
+    time: z.string().optional(),
   }),
   passengers: z.array(TicketPassengerSchema).min(1).max(6),
   contactMobile: z.string(),

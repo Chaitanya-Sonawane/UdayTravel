@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server'
-import { unstable_cache } from 'next/cache'
-import { requireUser } from '@/lib/server/guard'
 import { getAdminDb } from '@/lib/firebase/admin'
 import { firestoreMeter } from '@/lib/firebase/meter'
 import { getRoute, RouteId } from '@/lib/config/routes'
 import { BASE_FARE_INR, SEATS_PER_BUS } from '@/lib/config/rules'
 import { departureInstant, isDateInWindow, toISTIsoString, weekdayLabel } from '@/lib/time/ist'
 import { computeStatus } from '@/lib/availability/status'
+import { TripsRepository } from '@/lib/data/trips.repo'
 import {
   AvailabilityDoc,
   AvailabilityQuerySchema,
@@ -16,28 +15,29 @@ import {
   TripAvailabilityItem,
 } from '@/lib/schema/availability'
 
-const fetchCachedAvailabilityDoc = unstable_cache(
-  async (docId: string): Promise<AvailabilityDoc | null> => {
+async function fetchCachedAvailabilityDoc(docId: string): Promise<AvailabilityDoc | null> {
+  try {
     firestoreMeter.recordRead('availability', docId)
     const db = getAdminDb()
-    const docSnap = await db.collection('availability').doc(docId).get()
+    const docSnap = await Promise.race([
+      db.collection('availability').doc(docId).get(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Firestore timeout')), 350)
+      ),
+    ])
 
     if (!docSnap.exists) {
       return null
     }
 
     return docSnap.data() as AvailabilityDoc
-  },
-  ['uday-availability-cache'],
-  { revalidate: 60, tags: ['uday-availability-cache'] }
-)
+  } catch (err) {
+    console.warn(`[Availability API] fetchCachedAvailabilityDoc notice for ${docId}:`, err)
+    return null
+  }
+}
 
 export async function GET(req: Request) {
-  const auth = await requireUser(req)
-  if (!auth.success) {
-    return auth.response
-  }
-
   const { searchParams } = new URL(req.url)
   const routeParam = searchParams.get('route')
   const dateParam = searchParams.get('date')
@@ -199,6 +199,61 @@ export async function GET(req: Request) {
           seats: seatsMap,
         })
       }
+    }
+  }
+
+  // 3. Fallback: Query Firestore trips collection via TripsRepository if tripItems is empty
+  if (tripItems.length === 0) {
+    try {
+      const repoTrips = await TripsRepository.getTripsByDate(date, route)
+      for (const t of repoTrips) {
+        const totalSeats = t.totalSeats || SEATS_PER_BUS
+        const booked = (t.bookedSeats || []).length
+        const seatsLeft =
+          typeof t.availableSeats === 'number'
+            ? t.availableSeats
+            : Math.max(0, totalSeats - booked)
+        const depInstant = departureInstant(date, t.departureTime)
+        const arrivalTime = t.arrivalTime || '08:45'
+        const arrInstant = departureInstant(date, arrivalTime)
+        const durationMin = Math.round(
+          (arrInstant.getTime() - depInstant.getTime()) / (60 * 1000)
+        )
+        const durPositive = durationMin > 0 ? durationMin : 165
+        const hours = Math.floor(durPositive / 60)
+        const mins = durPositive % 60
+        const durationFormatted = `${String(hours).padStart(2, '0')}h ${String(mins).padStart(2, '0')}m`
+
+        const status = computeStatus({
+          seatsLeft,
+          departure: depInstant,
+          now,
+        })
+
+        const seatsMap = generateDefaultSeatsMap(booked)
+        for (const bookedSeat of t.bookedSeats || []) {
+          seatsMap[bookedSeat] = 'blocked'
+        }
+
+        tripItems.push({
+          tripId: t.tripId || t.id,
+          busName: t.busId === 'bus_mh16dp4951' ? 'Uday Express 01' : 'Uday Express',
+          busType: '3+2 Seater Coach',
+          departure: toISTIsoString(depInstant),
+          arrival: toISTIsoString(arrInstant),
+          departureTime: t.departureTime,
+          arrivalTime,
+          duration: durationFormatted,
+          seatsLeft,
+          totalCapacity: totalSeats,
+          booked,
+          status,
+          fare: t.fare || BASE_FARE_INR,
+          seats: seatsMap,
+        })
+      }
+    } catch (err) {
+      console.warn('[Availability API] Fallback to TripsRepository failed:', err)
     }
   }
 

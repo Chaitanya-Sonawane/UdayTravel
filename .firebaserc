@@ -1,8 +1,5 @@
 {
   "projects": {
-    "default": "udaytravels-ad458",
-    "dev": "uday-travels-dev",
-    "live": "udaytravels-ad458",
-    "prod": "uday-travels-prod"
+    "default": "united18-a884d"
   }
 }

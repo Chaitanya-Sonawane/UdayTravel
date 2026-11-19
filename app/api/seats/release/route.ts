@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/server/guard'
 import { SeatsRepository } from '@/lib/data/seats.repo'
+import { releaseSeatInRtdb } from '@/lib/firebase/rtdb'
 import { AppError } from '@/lib/errors/app-error'
 
 export async function POST(req: Request) {
@@ -21,6 +22,21 @@ export async function POST(req: Request) {
     }
 
     await SeatsRepository.releaseHold(tripId, date, seatIds, auth.uid, grp)
+
+    // Sync release to Realtime Database
+    try {
+      await Promise.all(
+        seatIds.map((seatId: string) =>
+          releaseSeatInRtdb({
+            tripId,
+            seatId,
+            userId: auth.uid,
+          })
+        )
+      )
+    } catch (rtdbErr) {
+      console.warn('[releaseHold] RTDB release sync warning:', rtdbErr)
+    }
 
     return NextResponse.json({ success: true, released: seatIds }, { status: 200 })
   } catch (err: unknown) {

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const GenderEnum = z.enum(['man', 'woman'])
+export const GenderEnum = z.enum(['man', 'woman', 'male', 'female', 'Male', 'Female'])
 export type Gender = z.infer<typeof GenderEnum>
 
 export const SavedPassengerSchema = z.object({

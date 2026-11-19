@@ -194,34 +194,22 @@ export class SeatsRepository {
       const departureAt =
         options?.departureAt || currentDoc?.departureAt || (now + 24 * 3600 * 1000)
 
-      // Clean expired holds
+      // Clean expired holds and treat seats previously held by THIS user/device as available for re-selection/replacement
       const cleanedSeats: Record<string, BusSeatEntry> = {}
-      let userActiveHoldCount = 0
 
       for (const [id, entry] of Object.entries(currentSeats)) {
-        if (entry.state === 'HELD' && entry.holdExpiresAt && entry.holdExpiresAt <= now) {
+        const isExpired = entry.state === 'HELD' && entry.holdExpiresAt && entry.holdExpiresAt <= now
+        const isHeldBySameUser =
+          entry.state === 'HELD' &&
+          ((entry.heldBy && entry.heldBy === uid) ||
+            (options?.deviceId && entry.deviceId && entry.deviceId === options.deviceId) ||
+            (entry.grp && entry.grp === grp))
+
+        if (isExpired || isHeldBySameUser) {
           cleanedSeats[id] = { state: 'AVAILABLE' }
         } else {
           cleanedSeats[id] = entry
-          if (
-            entry.state === 'HELD' &&
-            entry.holdExpiresAt &&
-            entry.holdExpiresAt > now &&
-            entry.grp !== grp &&
-            ((entry.heldBy && entry.heldBy === uid) ||
-              (options?.deviceId && entry.deviceId && entry.deviceId === options.deviceId))
-          ) {
-            userActiveHoldCount++
-          }
         }
-      }
-
-      // Abuse check: Max 1 active hold per uid + device
-      if (options?.deviceId && userActiveHoldCount > 0) {
-        throw new AppError(
-          ErrorCodes.CONFLICT,
-          'You already have an active seat hold in progress. Please complete or release it first.'
-        )
       }
 
       // Max 6 seats per booking

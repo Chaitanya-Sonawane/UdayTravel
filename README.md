@@ -1,97 +1,110 @@
-# Uday Travels — Bus Booking & Ticketing Platform
+# United 18 Stock
 
-A production-grade bus reservation, ticketing, and fleet management platform for Uday Travels (operating daily express coaches between Ahilyanagar and Pune).
+A simple voice stock-input web application for a men's wear shop, built with Next.js (App Router), TypeScript, Tailwind CSS, Firebase Auth (email/password), and Cloud Firestore.
 
-## Key Features
+---
 
-- **Next.js 16 (App Router) + TypeScript Strict**: Modern web architecture with fast server components and optimized static generation.
-- **Firebase Authentication & Firestore**: Secure customer authentication with persistent local sessions and server-authoritative Firestore data models.
-- **Seat Selection & Realtime Locking**: 2x3 bus seat chart (50 seats) with live SSE real-time state updates and atomic Firestore transaction locks with TTL.
-- **Multi-Passenger Booking**: Support for 1–6 passengers in a single booking with individual seat assignments and saved co-passengers.
-- **Saved Travellers**: Automatically sync and reuse saved passenger profiles linked to the user's Firebase account.
-- **Payment Gateway (Razorpay)**: Production Razorpay integration with integer-paise money handling, signature verification, and webhook deduplication.
-- **Travel Wallet & Credit System**: Full ledger-backed customer wallet for instant credits and seamless checkout deductions.
-- **Cancellations & Automated Refunds**: Policy-enforced cancellation terms with automated seat release and wallet credits.
-- **Comprehensive Admin Portal (`/admin`)**:
-  - Custom schedule creation & date-wise capacity management
-  - Interactive seat chart configuration (blocking, reserving, booking overrides)
-  - User and traveller directory management
-  - Payment and refund reconciliation ledger
-- **Zero Client Trust**: All pricing, seat availability, and financial state transitions are strictly validated and orchestrated on the server.
+## What the Owner Does
+Stock arrives. A helper counts it and says it out loud. The owner taps the mic and says, for example: `"pant grey 5 size 32"`. The app reads the sentence, shows a small review card, the owner taps **Save** (or hits Enter), and the stock count goes up. Nothing is saved until the owner taps Save.
+
+## Core Rule: Nothing is Predefined
+There are **no preset types, colours, sizes, or attributes**. Types (`pant`, `shirt`, `short pants`, `t-shirt`...), colours, and sizes are created dynamically at the moment the owner says them:
+- A type said again (`pant`, `pants`, `Pant`) automatically resolves into the same type, never a duplicate.
+- Same colour + size adds to the existing count.
+- Dynamic short codes (`PN`, `SH`, `TSH`, `SPN`) and item codes (`PN-GRY-32`) are generated deterministically.
+
+---
+
+## Features & Screens
+1. **Login Page (`/login`)**:
+   - Clean email/password sign-in.
+   - Protected route guarding the dashboard.
+   - Owner user is created directly in the Firebase console (no public sign-up).
+2. **Main Dashboard (`/`)**:
+   - **Left Sidebar / Mobile Top Bar**: "All stock" with total counts + dynamic buttons per category.
+   - **Voice & Fallback Text Card**: Round mic button pulsing when active, Web Speech API (`webkitSpeechRecognition`, `en-IN`), live interim text updates, and instant text fallback.
+   - **Review Card**: Editable Type (with suggestions datalist), Colour, Size, and Count. Validation displays red borders and error messages for required fields. Enter key saves.
+   - **Feedback & Focus**: Success toast (`Saved: 5 × Pant · Grey · 32 → code PN-GRY-32`), auto-clears input, and refocuses for the next entry.
+   - **Stock View**:
+     - *All stock*: visual bar chart of inventory distribution across types.
+     - *Selected type*: heading with total count, in-place editable type code (regenerates all item codes for that category), colour summary chips, bar chart by size, and an item table with `−` and `+` adjustment buttons (never below 0).
+   - **Undo Last Entry**: Single-tap atomic transaction reversing the owner's latest entry, deleting newly created items/types if count reaches 0, and marking the entry undone.
+3. **Real-time Sync**:
+   - Real-time `onSnapshot` listeners on `types` and the active type's `items`. Multiple phones stay synced instantly.
+4. **Light & Dark Mode**:
+   - Automatically adapts to system preferences (`prefers-color-scheme`). Large touch targets (≥44px) optimized for mobile shop floor usage.
+
+---
 
 ## Tech Stack
+- **Framework**: Next.js 16 (App Router)
+- **Language**: TypeScript (strict mode)
+- **Styling**: Tailwind CSS
+- **Database & Auth**: Firebase Auth + Cloud Firestore (Location: `asia-south1`, Mumbai)
+- **Voice**: Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`, `lang: "en-IN"`)
+- **Testing**: Vitest
 
-- **Framework**: Next.js 16.4.5 (App Router, Turbopack)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS, Lucide React
-- **Database & Auth**: Firebase Auth, Firebase Firestore (Admin SDK)
-- **Payments**: Razorpay Node SDK
-- **Testing**: Vitest (100+ unit and integration tests)
+---
 
-## Getting Started
+## Environment Variables Configuration
 
-### 1. Install Dependencies
-
-```bash
-pnpm install
-```
-
-### 2. Environment Variables
-
-Create `.env.local` based on `.env.example`:
-
-```env
-# Firebase Client SDK
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
-
-# Firebase Admin SDK
-FIREBASE_PROJECT_ID=...
-FIREBASE_CLIENT_EMAIL=...
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n..."
-
-# Razorpay
-RAZORPAY_KEY_ID=...
-RAZORPAY_KEY_SECRET=...
-RAZORPAY_WEBHOOK_SECRET=...
-NEXT_PUBLIC_RAZORPAY_KEY_ID=...
-```
-
-### 3. Run Development Server
+Copy `.env.local.example` to `.env.local`:
 
 ```bash
-pnpm dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Configure your Firebase client credentials:
 
-### 4. Run Tests & Typecheck
-
-```bash
-# Run unit & integration test suite
-pnpm test
-
-# Run TypeScript type check
-pnpm typecheck
-
-# Run production build
-pnpm build
+```ini
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyAWoNVl523wkiVU50e7aKXZAjlnY15PBxk
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=united18-a884d.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=united18-a884d
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=united18-a884d.firebasestorage.app
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=292514780495
+NEXT_PUBLIC_FIREBASE_APP_ID=1:292514780495:web:82174ebbd658ac1e25e13a
+NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=G-ZVFQERLQC3
 ```
 
-## Documentation
+---
 
-Full architectural specifications and guides are located in `/docs`:
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — System architecture, sequence diagrams, and design rules
-- [`docs/BACKEND_AUDIT.md`](docs/BACKEND_AUDIT.md) — Deep architectural audit of existing components
-- [`docs/PAYMENTS.md`](docs/PAYMENTS.md) — Razorpay order lifecycle and webhook deduplication
-- [`docs/WALLET.md`](docs/WALLET.md) — Integer-paise double-entry wallet ledger specification
-- [`docs/SECURITY.md`](docs/SECURITY.md) — Authentication, App Check, and Firestore security rules
-- [`docs/TESTING.md`](docs/TESTING.md) — Test matrix and verification guides
+## Running Locally
 
-## License
+1. **Install dependencies**:
+   ```bash
+   pnpm install
+   ```
+2. **Run tests**:
+   ```bash
+   pnpm test
+   ```
+3. **Start development server**:
+   ```bash
+   pnpm dev
+   ```
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-Private and confidential — Uday Travels © 2026.
+---
+
+## Deploying
+
+### Option A: Deploy to Firebase Hosting & Rules
+1. Log in to Firebase CLI:
+   ```bash
+   firebase login
+   ```
+2. Deploy Firestore Security Rules & Indexes:
+   ```bash
+   firebase deploy --only firestore:rules,firestore:indexes
+   ```
+3. Build and Deploy Hosting:
+   ```bash
+   pnpm build
+   firebase deploy --only hosting
+   ```
+
+### Option B: Deploy to Vercel
+1. Push repository to GitHub.
+2. Import project in Vercel.
+3. Add the `NEXT_PUBLIC_FIREBASE_*` environment variables in Vercel Project Settings.
+4. Deploy!

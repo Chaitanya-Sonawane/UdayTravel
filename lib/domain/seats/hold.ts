@@ -5,6 +5,7 @@ import { AvailabilityRepository } from '../../data/availability.repo'
 import { getRoute, RouteId } from '../../config/routes'
 import { BASE_FARE_INR, HOLD_TTL_MS, SEATS_PER_BUS } from '../../config/rules'
 import { rupeesToPaise, computeBookingTotal } from '../../money'
+import { holdSeatInRtdb } from '../../firebase/rtdb'
 
 function getHoldSecret(): string {
   const secret = process.env.HOLD_SIGNING_SECRET
@@ -123,6 +124,24 @@ export async function placeSeatHold(params: PlaceSeatHoldParams): Promise<PlaceS
       deviceId,
     }
   )
+
+  // Mirror hold to Realtime Database non-blocking (so HTTP response returns immediately without hanging)
+  try {
+    Promise.all(
+      seatIds.map((seatId) =>
+        holdSeatInRtdb({
+          tripId,
+          seatId,
+          userId: uid,
+          holdTtlMs: HOLD_TTL_MS || 300000,
+        })
+      )
+    ).catch((rtdbErr) => {
+      console.warn('[placeSeatHold] Non-blocking RTDB mirror warning:', rtdbErr)
+    })
+  } catch (rtdbErr) {
+    console.warn('[placeSeatHold] Non-blocking RTDB mirror warning:', rtdbErr)
+  }
 
   const holdToken = signHoldToken(grp, uid, seatIds, holdExpiresAt)
 

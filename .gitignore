@@ -18,5 +18,8 @@ node_modules
 .next/
 .DS_Store
 .dev-firestore-store.json
+serviceAccountKey.json
+*service-account*.json
 tsconfig.tsbuildinfo
 *.log
+_archive_legacy/

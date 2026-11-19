@@ -8,10 +8,23 @@ export const CreateOrderRequestSchema = z.object({
   passengers: z.array(PassengerDetailSchema).min(1).max(6),
   contactMobile: z.string().min(10).max(15),
   email: z.string().email().optional(),
-  routeId: z.enum(['AHM_PUN', 'PUN_AHM']).optional(),
+  routeId: z.string().optional(),
   tripId: z.string().optional(),
   travelDate: z.string().optional(),
   busName: z.string().optional(),
+  pickup: z
+    .object({
+      pointId: z.string().optional(),
+      name: z.string(),
+      pickupTime: z.string().optional(),
+    })
+    .optional(),
+  drop: z
+    .object({
+      pointId: z.string().optional(),
+      name: z.string(),
+    })
+    .optional(),
 })
 
 export type CreateOrderRequest = z.infer<typeof CreateOrderRequestSchema>

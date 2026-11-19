@@ -206,19 +206,16 @@ export function countTakenSeats(seats: Record<string, SeatState>, now: number): 
 }
 
 /**
- * Evaluates the rescue ladder level for a single seat and gender:
- * - Level 0: Free seat in open zone or zone of gender g.
- * - Level 1: Free seat with no directly adjacent opposite-gender occupant (buffer seat empty).
- * - Level 2: Any free seat when fullness >= 90% or departure <= 6h (needs acceptAdjacent).
- * - 'OPEN': Every free seat when departure <= 1h.
- * - null: Not available.
+ * Evaluates seat level:
+ * When standard seat rules are applied, any free seat is level 0 (open for any passenger).
+ * Occupied or blocked seats return null.
  */
 export function levelFor(
   seats: Record<string, SeatState>,
   seatId: string,
-  gender: Gender,
-  now: number,
-  departureAt: number
+  _gender?: Gender,
+  now: number = Date.now(),
+  _departureAt?: number
 ): 0 | 1 | 2 | 'OPEN' | null {
   const normalized = normalizeSeats(seats)
   const entry = normalized[seatId]
@@ -227,90 +224,31 @@ export function levelFor(
     return null
   }
 
-  const zone = zoneOf(seatId)
-  const zg = zoneGender(normalized, zone, now)
-
-  // Level 0: Open zone or same gender
-  if (zg === null || zg === gender) {
-    return 0
-  }
-
-  // Opposite gender is present in this zone.
-  const oppositeGender: Gender = gender === 'F' ? 'M' : 'F'
-  const nbrs = neighbours(seatId)
-  const hasDirectOppositeNeighbour = nbrs.some(
-    (nbrId) => getActiveSeatGender(normalized[nbrId], now) === oppositeGender
-  )
-
-  // Level 1: No directly adjacent opposite-gender occupant
-  if (!hasDirectOppositeNeighbour) {
-    return 1
-  }
-
-  // Directly adjacent to opposite gender.
-  // Check if OPEN (T-1h)
-  const isOpenWindow = now >= departureAt - T_OPEN_MS
-  if (isOpenWindow) {
-    return 'OPEN'
-  }
-
-  // Check if Level 2 is open (T-6h or 90% fullness)
-  const isAdjacentTime = now >= departureAt - T_ADJACENT_MS
-  const takenCount = countTakenSeats(normalized, now)
-  const isAdjacentFullness = takenCount / SEATS_TOTAL >= FULLNESS_ADJACENT
-
-  if (isAdjacentTime || isAdjacentFullness) {
-    return 2
-  }
-
-  return null
+  return 0
 }
 
 /**
- * Returns the lowest available level for gender g on the coach.
+ * Returns the lowest available level on the coach (0 for open seating).
  */
 export function lowestAvailableLevel(
-  seats: Record<string, SeatState>,
-  gender: Gender,
-  now: number,
-  departureAt: number
+  _seats?: Record<string, SeatState>,
+  _gender?: Gender,
+  _now?: number,
+  _departureAt?: number
 ): 0 | 1 | 2 | 'OPEN' {
-  const normalized = normalizeSeats(seats)
-  let has0 = false
-  let has1 = false
-  let has2 = false
-  let hasOpen = false
-
-  for (const seatId of ALL_SEAT_IDS) {
-    const lvl = levelFor(normalized, seatId, gender, now, departureAt)
-    if (lvl === 0) has0 = true
-    else if (lvl === 1) has1 = true
-    else if (lvl === 2) has2 = true
-    else if (lvl === 'OPEN') hasOpen = true
-  }
-
-  if (has0) return 0
-  if (has1) return 1
-  if (has2) return 2
-  if (hasOpen) return 'OPEN'
-  return 0 // Default lowest
-}
-
-function levelRank(l: 0 | 1 | 2 | 'OPEN'): number {
-  if (l === 0) return 0
-  if (l === 1) return 1
-  if (l === 2) return 2
-  return 3 // 'OPEN'
+  return 0
 }
 
 /**
- * Validates a seat booking request against gender rules and the rescue ladder.
+ * Validates a seat booking request:
+ * Verifies valid seat IDs, uniqueness, and that all requested seats are currently free.
+ * Free seats are available to all passengers without gender or adjacent restrictions.
  */
 export function evaluate(
   seats: Record<string, SeatState>,
-  req: { family: boolean; acceptAdjacent: boolean; pax: Pax[] },
+  req: { family?: boolean; acceptAdjacent?: boolean; pax: Pax[] },
   now: number,
-  departureAt: number
+  _departureAt?: number
 ): { ok: true; levels: Record<string, 0 | 1 | 2 | 'OPEN'> } | { ok: false; code: ErrorCode; seatId?: string } {
   const normalized = normalizeSeats(seats)
 
@@ -318,7 +256,7 @@ export function evaluate(
     return { ok: false, code: 'FAMILY_INVALID' }
   }
 
-  // Unique seat selection check
+  // Unique seat selection check and valid seat ID check
   const seatIdSet = new Set<string>()
   for (const p of req.pax) {
     if (!ALL_SEAT_IDS.includes(p.seatId)) {
@@ -330,23 +268,6 @@ export function evaluate(
     seatIdSet.add(p.seatId)
   }
 
-  // Check child requirement: child under 12 requires family flag with adult >= 18
-  const hasChild = req.pax.some((p) => p.age <= CHILD_MAX_AGE)
-  const hasAdult = req.pax.some((p) => p.age >= FAMILY_MIN_ADULT_AGE)
-
-  if (hasChild) {
-    if (!req.family || req.pax.length < 2 || !hasAdult) {
-      return { ok: false, code: 'FAMILY_INVALID' }
-    }
-  }
-
-  // Validate family flag requirements
-  if (req.family) {
-    if (req.pax.length < 2 || req.pax.length > FAMILY_MAX || !hasAdult) {
-      return { ok: false, code: 'FAMILY_INVALID' }
-    }
-  }
-
   // Ensure all requested seats are currently free
   for (const p of req.pax) {
     if (!isSeatFree(normalized[p.seatId], now)) {
@@ -354,77 +275,10 @@ export function evaluate(
     }
   }
 
-  // Group passengers by zone
-  const paxByZone = new Map<string, Pax[]>()
-  for (const p of req.pax) {
-    const z = zoneOf(p.seatId)
-    const list = paxByZone.get(z) || []
-    list.push(p)
-    paxByZone.set(z, list)
-  }
-
-  // If not family: non-family passengers of different gender cannot share a zone
-  if (!req.family) {
-    for (const [z, paxList] of paxByZone.entries()) {
-      const genders = new Set(paxList.map((p) => p.gender))
-      if (genders.size > 1) {
-        return { ok: false, code: 'SEAT_GENDER_ZONE', seatId: paxList[1]?.seatId || '' }
-      }
-    }
-  }
-
-  // If family: family members may mix gender inside a zone ONLY if the zone has no strangers
-  if (req.family) {
-    for (const [z, paxList] of paxByZone.entries()) {
-      const genders = new Set(paxList.map((p) => p.gender))
-      if (genders.size > 1) {
-        // Mixed gender in this zone: verify zone has no existing strangers
-        const existingStranger = seatsInZone(z).some((sId) => {
-          if (seatIdSet.has(sId)) return false
-          return getActiveSeatGender(normalized[sId], now) !== null
-        })
-        if (existingStranger) {
-          return { ok: false, code: 'SEAT_GENDER_ZONE', seatId: paxList[0]?.seatId || '' }
-        }
-      }
-    }
-  }
-
-  // Evaluate ladder levels for all passengers
+  // All requested seats are free: booking is completely permitted
   const levels: Record<string, 0 | 1 | 2 | 'OPEN'> = {}
-
   for (const p of req.pax) {
-    const z = zoneOf(p.seatId)
-    const paxInZone = paxByZone.get(z) || []
-    const zoneGenders = new Set(paxInZone.map((x) => x.gender))
-
-    // Special case: Family members sharing an empty zone get Level 0
-    if (req.family && zoneGenders.size > 1) {
-      const existingStranger = seatsInZone(z).some((sId) => {
-        if (seatIdSet.has(sId)) return false
-        return getActiveSeatGender(normalized[sId], now) !== null
-      })
-      if (!existingStranger) {
-        levels[p.seatId] = 0
-        continue
-      }
-    }
-
-    const lvl = levelFor(normalized, p.seatId, p.gender, now, departureAt)
-    if (lvl === null) {
-      return { ok: false, code: 'SEAT_GENDER_ZONE', seatId: p.seatId }
-    }
-
-    const minLvl = lowestAvailableLevel(normalized, p.gender, now, departureAt)
-    if (levelRank(lvl) > levelRank(minLvl)) {
-      return { ok: false, code: 'SEAT_GENDER_ZONE', seatId: p.seatId }
-    }
-
-    if (lvl === 2 && !req.acceptAdjacent) {
-      return { ok: false, code: 'ADJACENT_CONSENT_REQUIRED', seatId: p.seatId }
-    }
-
-    levels[p.seatId] = lvl
+    levels[p.seatId] = 0
   }
 
   return { ok: true, levels }
@@ -518,144 +372,80 @@ export function suggestSeats(
     })
   }
 
-  // 1. Family Blocks (2..6 pax)
-  if (group.family) {
-    if (nPax === 2) {
-      // A 2-seat side (rows A-J, left side: 1, 2)
-      for (const row of ALL_SEAT_ROWS) {
-        const s1 = `${row}1`
-        const s2 = `${row}2`
-        if (isSeatFree(normalized[s1], now) && isSeatFree(normalized[s2], now)) {
-          tryAddSuggestion([s1, s2], 400, 'FAMILY_BLOCK')
-        }
-      }
-    } else if (nPax === 3) {
-      // A 3-seat side (rows A-J, right side: 3, 4, 5)
-      for (const row of ALL_SEAT_ROWS) {
-        const s3 = `${row}3`
-        const s4 = `${row}4`
-        const s5 = `${row}5`
-        if (
-          isSeatFree(normalized[s3], now) &&
-          isSeatFree(normalized[s4], now) &&
-          isSeatFree(normalized[s5], now)
-        ) {
-          tryAddSuggestion([s3, s4, s5], 400, 'FAMILY_BLOCK')
-        }
-      }
-    } else if (nPax === 4) {
-      // Two 2-seat sides in nearby rows
-      for (let i = 0; i < ALL_SEAT_ROWS.length - 1; i++) {
-        const r1 = ALL_SEAT_ROWS[i]
-        const r2 = ALL_SEAT_ROWS[i + 1]
-        const seats4 = [`${r1}1`, `${r1}2`, `${r2}1`, `${r2}2`]
-        if (seats4.every((s) => isSeatFree(normalized[s], now))) {
-          tryAddSuggestion(seats4, 400, 'FAMILY_BLOCK')
-        }
-      }
-    } else if (nPax === 5) {
-      // The 2-seat and 3-seat sides of one row
-      for (const row of ALL_SEAT_ROWS) {
-        const seats5 = [`${row}1`, `${row}2`, `${row}3`, `${row}4`, `${row}5`]
-        if (seats5.every((s) => isSeatFree(normalized[s], now))) {
-          tryAddSuggestion(seats5, 400, 'FAMILY_BLOCK')
-        }
-      }
-    } else if (nPax === 6) {
-      // Two 3-seat sides
-      for (let i = 0; i < ALL_SEAT_ROWS.length - 1; i++) {
-        const r1 = ALL_SEAT_ROWS[i]
-        const r2 = ALL_SEAT_ROWS[i + 1]
-        const seats6 = [`${r1}3`, `${r1}4`, `${r1}5`, `${r2}3`, `${r2}4`, `${r2}5`]
-        if (seats6.every((s) => isSeatFree(normalized[s], now))) {
-          tryAddSuggestion(seats6, 400, 'FAMILY_BLOCK')
-        }
-      }
-      // Or three 2-seat sides
-      for (let i = 0; i < ALL_SEAT_ROWS.length - 2; i++) {
-        const r1 = ALL_SEAT_ROWS[i]
-        const r2 = ALL_SEAT_ROWS[i + 1]
-        const r3 = ALL_SEAT_ROWS[i + 2]
-        const seats6 = [`${r1}1`, `${r1}2`, `${r2}1`, `${r2}2`, `${r3}1`, `${r3}2`]
-        if (seats6.every((s) => isSeatFree(normalized[s], now))) {
-          tryAddSuggestion(seats6, 390, 'FAMILY_BLOCK')
-        }
-      }
-    }
-  }
-
-  // 2. Solo / Non-Family or Same-Gender Groups
-  const firstPax = group.pax[0]
-  if (!firstPax) return []
-  const g = firstPax.gender
-  const isSameGender = group.pax.every((p) => p.gender === g)
-
-  // Check if any same-gender zone currently exists with free seats
-  let hasSameGenderZoneWithFree = false
-  for (const row of ALL_SEAT_ROWS) {
-    for (const side of ['L', 'R']) {
-      const z = `${row}-${side}`
-      if (zoneGender(normalized, z, now) === g) {
-        if (seatsInZone(z).some((s) => isSeatFree(normalized[s], now))) {
-          hasSameGenderZoneWithFree = true
-          break
-        }
-      }
-    }
-  }
-
+  // 1. Group Blocks (1..6 pax contiguous seats)
   if (nPax === 1) {
     for (const seatId of ALL_SEAT_IDS) {
-      if (!isSeatFree(normalized[seatId], now)) continue
-      const z = zoneOf(seatId)
-      const zg = zoneGender(normalized, z, now)
-      const nbrs = neighbours(seatId)
-
-      // Check highest: neighbour already same-gender
-      const hasSameGenderNeighbour = nbrs.some(
-        (nbr) => getActiveSeatGender(normalized[nbr], now) === g
-      )
-
-      if (hasSameGenderNeighbour) {
-        tryAddSuggestion([seatId], 1000, 'NEXT_TO_SAME_GENDER')
-        continue
-      }
-
-      // High: zone already holds gender g, neighbours empty
-      if (zg === g) {
-        tryAddSuggestion([seatId], 500, 'SAME_ZONE')
-        continue
-      }
-
-      // Fresh open zone
-      if (zg === null) {
-        let score = 200
-        if (hasSameGenderZoneWithFree) {
-          score -= 100 // Penalty for opening new zone when existing holds same gender
-        }
-        tryAddSuggestion([seatId], score, 'FRESH_ZONE')
+      if (isSeatFree(normalized[seatId], now)) {
+        tryAddSuggestion([seatId], 200, 'FRESH_ZONE')
       }
     }
-  } else if (isSameGender) {
-    // Multi-pax same gender in one booking
+  } else if (nPax === 2) {
+    // 2-seat side (rows A-J, left side: 1, 2)
     for (const row of ALL_SEAT_ROWS) {
-      if (nPax === 2) {
-        const leftSeats = [`${row}1`, `${row}2`]
-        if (leftSeats.every((s) => isSeatFree(normalized[s], now))) {
-          const zg = zoneGender(normalized, `${row}-L`, now)
-          let score = zg === g ? 600 : 250
-          if (zg === null && hasSameGenderZoneWithFree) score -= 100
-          tryAddSuggestion(leftSeats, score, zg === g ? 'SAME_ZONE' : 'FRESH_ZONE')
-        }
-      } else if (nPax === 3) {
-        const rightSeats = [`${row}3`, `${row}4`, `${row}5`]
-        if (rightSeats.every((s) => isSeatFree(normalized[s], now))) {
-          const zg = zoneGender(normalized, `${row}-R`, now)
-          let score = zg === g ? 600 : 250
-          if (zg === null && hasSameGenderZoneWithFree) score -= 100
-          tryAddSuggestion(rightSeats, score, zg === g ? 'SAME_ZONE' : 'FRESH_ZONE')
-        }
+      const s1 = `${row}1`
+      const s2 = `${row}2`
+      if (isSeatFree(normalized[s1], now) && isSeatFree(normalized[s2], now)) {
+        tryAddSuggestion([s1, s2], 400, 'FAMILY_BLOCK')
       }
+      const s3 = `${row}3`
+      const s4 = `${row}4`
+      if (isSeatFree(normalized[s3], now) && isSeatFree(normalized[s4], now)) {
+        tryAddSuggestion([s3, s4], 380, 'FAMILY_BLOCK')
+      }
+      const s5 = `${row}5`
+      if (isSeatFree(normalized[s4], now) && isSeatFree(normalized[s5], now)) {
+        tryAddSuggestion([s4, s5], 380, 'FAMILY_BLOCK')
+      }
+    }
+  } else if (nPax === 3) {
+    // 3-seat side (rows A-J, right side: 3, 4, 5)
+    for (const row of ALL_SEAT_ROWS) {
+      const s3 = `${row}3`
+      const s4 = `${row}4`
+      const s5 = `${row}5`
+      if (
+        isSeatFree(normalized[s3], now) &&
+        isSeatFree(normalized[s4], now) &&
+        isSeatFree(normalized[s5], now)
+      ) {
+        tryAddSuggestion([s3, s4, s5], 400, 'FAMILY_BLOCK')
+      }
+    }
+  } else if (nPax === 4) {
+    // Two 2-seat sides in nearby rows
+    for (let i = 0; i < ALL_SEAT_ROWS.length - 1; i++) {
+      const r1 = ALL_SEAT_ROWS[i]
+      const r2 = ALL_SEAT_ROWS[i + 1]
+      const seats4 = [`${r1}1`, `${r1}2`, `${r2}1`, `${r2}2`]
+      if (seats4.every((s) => isSeatFree(normalized[s], now))) {
+        tryAddSuggestion(seats4, 400, 'FAMILY_BLOCK')
+      }
+    }
+  } else if (nPax === 5) {
+    // Whole row of 5 seats
+    for (const row of ALL_SEAT_ROWS) {
+      const seats5 = [`${row}1`, `${row}2`, `${row}3`, `${row}4`, `${row}5`]
+      if (seats5.every((s) => isSeatFree(normalized[s], now))) {
+        tryAddSuggestion(seats5, 400, 'FAMILY_BLOCK')
+      }
+    }
+  } else if (nPax === 6) {
+    // Two 3-seat sides in nearby rows
+    for (let i = 0; i < ALL_SEAT_ROWS.length - 1; i++) {
+      const r1 = ALL_SEAT_ROWS[i]
+      const r2 = ALL_SEAT_ROWS[i + 1]
+      const seats6 = [`${r1}3`, `${r1}4`, `${r1}5`, `${r2}3`, `${r2}4`, `${r2}5`]
+      if (seats6.every((s) => isSeatFree(normalized[s], now))) {
+        tryAddSuggestion(seats6, 400, 'FAMILY_BLOCK')
+      }
+    }
+  }
+
+  // Fallback: any free seats
+  if (suggestions.length === 0) {
+    const allFree = ALL_SEAT_IDS.filter((s) => isSeatFree(normalized[s], now))
+    if (allFree.length >= nPax) {
+      tryAddSuggestion(allFree.slice(0, nPax), 100, 'FRESH_ZONE')
     }
   }
 
