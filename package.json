@@ -2,6 +2,9 @@
   "name": "united18-stock",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "packageManager": "pnpm@12.3.4",
   "scripts": {
     "dev": "next dev -p 3000",
