@@ -31,6 +31,29 @@ import { ThemedErrorBanner } from '@/components/ui/ThemedErrorBanner'
 import NavDrawer from '@/components/navigation/NavDrawer'
 import { todayIST } from '@/lib/time/ist'
 
+function computeTripDuration(dep?: string, arr?: string, fallback = '2h 45m'): string {
+  if (!dep || !arr) return fallback
+  try {
+    const toMinutes = (s: string) => {
+      const clean = s.replace(/[^0-9:]/g, '')
+      const [h, m] = clean.split(':').map(Number)
+      let hours = h || 0
+      if (s.toLowerCase().includes('pm') && hours < 12) hours += 12
+      if (s.toLowerCase().includes('am') && hours === 12) hours = 0
+      return hours * 60 + (m || 0)
+    }
+    const m1 = toMinutes(dep)
+    const m2 = toMinutes(arr)
+    const diff = m2 >= m1 ? m2 - m1 : m2 + 24 * 60 - m1
+    if (diff <= 0 || isNaN(diff)) return fallback
+    const hours = Math.floor(diff / 60)
+    const mins = diff % 60
+    return `${hours}h ${mins ? `${mins}m` : ''}`.trim()
+  } catch {
+    return fallback
+  }
+}
+
 export default function BookingSummaryPage() {
   const router = useRouter()
   const {
@@ -237,7 +260,7 @@ export default function BookingSummaryPage() {
         cleanPointName(dropSnapshot?.name || dropping) ||
         (isToPune ? 'Shivajinagar' : 'Ekvira Chowk'),
     },
-    duration: journey.duration || '3h 30m',
+    duration: journey.duration || computeTripDuration(journey.departure, journey.arrival, '2h 45m'),
   }
 
   const handleExpire = useCallback(() => {

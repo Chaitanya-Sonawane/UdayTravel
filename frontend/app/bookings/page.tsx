@@ -51,7 +51,7 @@ export default function BookingsPage() {
         const res = await fetch('/api/bookings', { headers })
         if (res.ok) {
           const data = await res.json()
-          if (Array.isArray(data.tickets) && data.tickets.length > 0) {
+          if (Array.isArray(data.tickets)) {
             setTickets(data.tickets)
             setLoading(false)
             return
@@ -61,8 +61,7 @@ export default function BookingsPage() {
         // Safe catch for bookings fetch
       }
 
-      // Fallback: mock ticket so user always sees their preview booking
-      setTickets([mockTicket])
+      setTickets([])
       setLoading(false)
     })
 
@@ -86,12 +85,7 @@ export default function BookingsPage() {
       }
     } catch {}
 
-    // Check mock
-    if (searchQuery.trim().toUpperCase() === mockTicket.ticketNo) {
-      setTickets([mockTicket])
-    } else {
-      setTickets([])
-    }
+    setTickets([])
     setLoading(false)
   }
 
@@ -150,7 +144,7 @@ export default function BookingsPage() {
         <Link
           href="/account"
           aria-label="My Account"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-950 font-bold text-xs transition-colors shadow-2xs"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-none bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-950 font-bold text-xs transition-colors shadow-2xs"
         >
           <User size={15} className="text-[#B45309]" />
           <span className="hidden sm:inline">My Account</span>

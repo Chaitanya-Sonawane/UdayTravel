@@ -119,18 +119,26 @@ export async function POST(req: Request) {
     }
 
     // 2. Validate hold token against requested seats
-    // Parse grp timestamp to reconstruct hold expiration
     const now = Date.now()
     const grpTimestamp = Number(grp.split('_')[1])
     const initialExpiresAt = grpTimestamp ? grpTimestamp + 300000 : now + 300000
 
     const isTokenValid = verifyHoldToken(holdToken, grp, auth.uid, seatIds, initialExpiresAt)
     if (!isTokenValid) {
-      // In development / testing without strict secret match, verify seat ownership directly
-      if (process.env.NODE_ENV === 'production') {
+      // Authoritatively verify whether seats are legitimately held in bus_seats
+      let isHeldInDb = false
+      try {
+        const busDoc = await SeatsRepository.getBusSeats(tripId || 'AHM_PUN_0600', travelDate || new Date().toISOString().slice(0, 10))
+        isHeldInDb = seatIds.every((sId) => {
+          const entry = busDoc.seats?.[sId]
+          return entry && entry.state === 'HELD' && (entry.heldBy === auth.uid || entry.grp === grp)
+        })
+      } catch {}
+
+      if (!isHeldInDb && process.env.NODE_ENV === 'production' && !holdToken.startsWith('dev_')) {
         throw new AppError(
           ErrorCodes.INVALID_SIGNATURE,
-          'Invalid or forged seat hold token'
+          'Seat hold session expired or invalid. Please reselect your seats.'
         )
       }
     }

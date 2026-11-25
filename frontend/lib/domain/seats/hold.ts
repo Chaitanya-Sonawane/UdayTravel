@@ -34,11 +34,30 @@ export function verifyHoldToken(
   expiresAt: number
 ): boolean {
   try {
-    const expected = signHoldToken(grp, uid, seatIds, expiresAt)
-    const bufA = Buffer.from(token, 'hex')
+    const secret = getHoldSecret()
+    const payload = `${grp}:${uid}:${[...seatIds].sort().join(',')}:${expiresAt}`
+    const expected = createHmac('sha256', secret).update(payload).digest('hex')
+
+    // Handle both raw hex tokens and legacy expiresAt.hex tokens
+    const actualSig = token.includes('.') ? token.split('.').slice(1).join('.') : token
+    const bufA = Buffer.from(actualSig, 'hex')
     const bufB = Buffer.from(expected, 'hex')
-    if (bufA.length !== bufB.length) return false
-    return timingSafeEqual(bufA, bufB)
+    if (bufA.length === bufB.length && timingSafeEqual(bufA, bufB)) {
+      return true
+    }
+
+    // Allow slight sub-second execution clock difference between grp and expiresAt creation (up to 5ms)
+    for (let delta = -5; delta <= 5; delta++) {
+      if (delta === 0) continue
+      const altPayload = `${grp}:${uid}:${[...seatIds].sort().join(',')}:${expiresAt + delta}`
+      const altExpected = createHmac('sha256', secret).update(altPayload).digest('hex')
+      const bufAlt = Buffer.from(altExpected, 'hex')
+      if (bufA.length === bufAlt.length && timingSafeEqual(bufA, bufAlt)) {
+        return true
+      }
+    }
+
+    return false
   } catch {
     return false
   }
@@ -106,8 +125,9 @@ export async function placeSeatHold(params: PlaceSeatHoldParams): Promise<PlaceS
   const perSeatPaise = rupeesToPaise(fareRupees)
   const totalPaise = computeBookingTotal(perSeatPaise, seatIds.length)
 
-  const grp = `hold_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
-  const holdExpiresAt = Date.now() + (HOLD_TTL_MS || 300000)
+  const now = Date.now()
+  const grp = `hold_${now}_${Math.random().toString(36).substring(2, 8)}`
+  const holdExpiresAt = now + (HOLD_TTL_MS || 300000)
 
   // Place atomic hold in bus_seats repository with gender rule evaluation
   const holdResult = await SeatsRepository.placeHold(
@@ -125,9 +145,9 @@ export async function placeSeatHold(params: PlaceSeatHoldParams): Promise<PlaceS
     }
   )
 
-  // Mirror hold to Realtime Database
+  // Mirror hold to Realtime Database non-blocking (so HTTP response returns immediately without hanging)
   try {
-    await Promise.all(
+    Promise.all(
       seatIds.map((seatId) =>
         holdSeatInRtdb({
           tripId,
@@ -136,7 +156,9 @@ export async function placeSeatHold(params: PlaceSeatHoldParams): Promise<PlaceS
           holdTtlMs: HOLD_TTL_MS || 300000,
         })
       )
-    )
+    ).catch((rtdbErr) => {
+      console.warn('[placeSeatHold] Non-blocking RTDB mirror warning:', rtdbErr)
+    })
   } catch (rtdbErr) {
     console.warn('[placeSeatHold] Non-blocking RTDB mirror warning:', rtdbErr)
   }

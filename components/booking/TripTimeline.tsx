@@ -366,8 +366,8 @@ export function TripTimeline({ passengerCount, trip }: TripTimelineProps) {
                 rel="noopener noreferrer"
                 className="self-start sm:self-center px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 font-bold text-xs flex items-center gap-1.5 shadow-2xs shrink-0 transition-colors cursor-pointer"
               >
-                <span>Drop Location</span>
-                <ChevronRight size={13} />
+                <span>View Map</span>
+                <ExternalLink size={12} />
               </a>
             </div>
           </div>

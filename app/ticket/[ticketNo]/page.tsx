@@ -54,7 +54,9 @@ export default function TicketPage() {
   const [qr, setQr] = useState(false)
   const [cancelModal, setCancelModal] = useState(false)
 
-  const [ticket, setTicket] = useState<any>(() => getTicket(String(ticketNo)))
+  const [ticket, setTicket] = useState<any>(() =>
+    ticketNo ? getTicket(String(ticketNo)) : null
+  )
   const [loading, setLoading] = useState(true)
 
   // Navigation drawer state & auth matching Availability Page

@@ -64,14 +64,16 @@ export const mockTicket: Ticket = {
 }
 
 export function getTicket(ticketNo: string): Ticket | null {
-  if (ticketNo === 'UT-AP-X8B4BR' || ticketNo === 'UT25354' || ticketNo === 'UT-ACTIVE-TEST') {
+  if (
+    ticketNo === 'UT-ACTIVE-TEST' ||
+    ticketNo === 'UT25354' ||
+    ticketNo === 'UT100001' ||
+    ticketNo === 'UT-AP-QCS2UE'
+  ) {
     return { ...mockTicket, ticketNo }
   }
   if (ticketNo === 'UT-CANCELLED-01') {
     return { ...mockTicket, ticketNo, status: 'CANCELLED' }
-  }
-  if (ticketNo.startsWith('UT-AP-') || ticketNo.startsWith('UT-PA-') || ticketNo.startsWith('UT')) {
-    return { ...mockTicket, ticketNo }
   }
   return null
 }

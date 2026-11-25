@@ -51,7 +51,7 @@ export default function BookingsPage() {
         const res = await fetch('/api/bookings', { headers })
         if (res.ok) {
           const data = await res.json()
-          if (Array.isArray(data.tickets) && data.tickets.length > 0) {
+          if (Array.isArray(data.tickets)) {
             setTickets(data.tickets)
             setLoading(false)
             return
@@ -61,8 +61,7 @@ export default function BookingsPage() {
         // Safe catch for bookings fetch
       }
 
-      // Fallback: mock ticket so user always sees their preview booking
-      setTickets([mockTicket])
+      setTickets([])
       setLoading(false)
     })
 
@@ -86,12 +85,7 @@ export default function BookingsPage() {
       }
     } catch {}
 
-    // Check mock
-    if (searchQuery.trim().toUpperCase() === mockTicket.ticketNo) {
-      setTickets([mockTicket])
-    } else {
-      setTickets([])
-    }
+    setTickets([])
     setLoading(false)
   }
 
