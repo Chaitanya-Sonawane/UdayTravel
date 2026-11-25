@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { RoutesRepository } from '@/lib/data/routes.repo'
 import { resolveRouteId, PickupPoint, DropPoint } from '@/lib/types/route'

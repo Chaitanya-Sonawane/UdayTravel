@@ -1,1044 +1,446 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/lib/auth'
-import { parseSentence, ParseResult } from '@/lib/parse'
 import {
-  StockType,
-  StockItem,
-  saveStock,
-  adjustItemQty,
-  undoLastEntry,
-  updateTypeCode,
-  subscribeToStockTypes,
-  subscribeToStockItems,
-} from '@/lib/stock'
+  ArrowUpRight,
+  CircleHelp,
+  Menu,
+  X,
+  UserRound,
+  FileText,
+  PhoneCall,
+  Info,
+  LogOut,
+  CheckCircle2,
+  MapPin,
+  Bus,
+  Shield,
+  Users,
+  Mail,
+  Phone,
+  Clock,
+  ChevronDown,
+  List,
+  ChevronRight,
+  Gift,
+  Tag,
+  HelpCircle,
+  Wallet,
+  RotateCcw,
+  Loader2,
+} from 'lucide-react'
+import { subscribeToAuth, signOutUser, fetchCurrentProfile, hasDeviceAccount, isUserLoggedIn } from '@/lib/auth/client-auth'
+import { User } from 'firebase/auth'
+import BlackThemeFooter from '@/components/footer/BlackThemeFooter'
+import NavDrawer from '@/components/navigation/NavDrawer'
+import AlternatingInfoSection from '@/components/home/AlternatingInfoSection'
+import DarkThemeStatsSection from '@/components/home/DarkThemeStatsSection'
 
-// Extended interface for Web Speech API
-interface IWindowSpeechRecognition extends Window {
-  SpeechRecognition?: any
-  webkitSpeechRecognition?: any
-}
+const heroImage = 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/uday-travels-homepage-background%20%281%29-zMwZmyD7R7O8ItfYIMzzIrrJEy2TQT.png'
 
-export default function StockDashboard() {
+export default function Page() {
   const router = useRouter()
-  const { user, loading: authLoading, logout } = useAuth()
+  const [isPending, startTransition] = useTransition()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [userName, setUserName] = useState<string>('')
+  const [deviceHasAccount, setDeviceHasAccount] = useState<boolean>(false)
 
-  // Types & Items state (real-time)
-  const [types, setTypes] = useState<StockType[]>([])
-  const [typesLoading, setTypesLoading] = useState(true)
-  const [selectedTypeKey, setSelectedTypeKey] = useState<string | null>(null) // null means "All stock"
-  const [items, setItems] = useState<StockItem[]>([])
-  const [itemsLoading, setItemsLoading] = useState(false)
-
-  // Voice & Text Input state
-  const [inputText, setInputText] = useState('')
-  const [isListening, setIsListening] = useState(false)
-  const [speechError, setSpeechError] = useState<string | null>(null)
-  const recognitionRef = useRef<any>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  // Review Card state
-  const [reviewOpen, setReviewOpen] = useState(false)
-  const [reviewType, setReviewType] = useState('')
-  const [reviewColour, setReviewColour] = useState('')
-  const [reviewSize, setReviewSize] = useState('')
-  const [reviewQty, setReviewQty] = useState<number | ''>(1)
-  const [validationErrors, setValidationErrors] = useState<{
-    type?: string
-    size?: string
-    qty?: string
-  }>({})
-  const [isSaving, setIsSaving] = useState(false)
-
-  // Banner / Feedback Messages
-  const [feedback, setFeedback] = useState<{
-    type: 'success' | 'error' | 'info'
-    message: string
-  } | null>(null)
-
-  // Editing type code state
-  const [isEditingCode, setIsEditingCode] = useState(false)
-  const [codeEditValue, setCodeEditValue] = useState('')
-  const [codeEditError, setCodeEditError] = useState<string | null>(null)
-  const [codeEditLoading, setCodeEditLoading] = useState(false)
-
-  // Undo loading state
-  const [undoLoading, setUndoLoading] = useState(false)
-
-  // Transition for smooth UI updates
-  const [, startTransition] = useTransition()
-
-  // 1. Auth Guard
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/login')
-    }
-  }, [user, authLoading, router])
+    setIsMounted(true)
+    setDeviceHasAccount(hasDeviceAccount())
+  }, [])
 
-  // 2. Real-time listener for Types collection
-  useEffect(() => {
-    if (!user) return
-    const unsubscribe = subscribeToStockTypes(
-      (loadedTypes) => {
-        setTypes(loadedTypes)
-        setTypesLoading(false)
-      },
-      (err) => {
-        console.error('Types listener error:', err)
-        setTypesLoading(false)
-      }
-    )
-    return () => unsubscribe()
-  }, [user])
-
-  // 3. Real-time listener for selected Type's Items
-  useEffect(() => {
-    if (!user || !selectedTypeKey) {
-      setItems([])
-      return
-    }
-    setItemsLoading(true)
-    const unsubscribe = subscribeToStockItems(
-      selectedTypeKey,
-      (loadedItems) => {
-        setItems(loadedItems)
-        setItemsLoading(false)
-      },
-      (err) => {
-        console.error('Items listener error:', err)
-        setItemsLoading(false)
-      }
-    )
-    return () => unsubscribe()
-  }, [user, selectedTypeKey])
-
-  // Current selected type object
-  const currentType = types.find((t) => t.id === selectedTypeKey) || null
-  const totalStockCount = types.reduce((acc, t) => acc + (t.total || 0), 0)
-
-  // 4. Initialize Speech Recognition
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const win = window as unknown as IWindowSpeechRecognition
-    const SpeechRec = win.SpeechRecognition || win.webkitSpeechRecognition
-
-    if (!SpeechRec) {
-      return
-    }
-
-    const recognition = new SpeechRec()
-    recognition.lang = 'en-IN'
-    recognition.interimResults = true
-    recognition.continuous = false
-
-    recognition.onstart = () => {
-      setIsListening(true)
-      setSpeechError(null)
-    }
-
-    recognition.onresult = (event: any) => {
-      let interim = ''
-      let final = ''
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          final += event.results[i][0].transcript
-        } else {
-          interim += event.results[i][0].transcript
-        }
-      }
-
-      const spoken = final || interim
-      if (spoken) {
-        setInputText(spoken)
-      }
-
-      if (final) {
-        handleTriggerParse(final)
-      }
-    }
-
-    recognition.onerror = (event: any) => {
-      console.warn('Speech recognition error:', event.error)
-      setIsListening(false)
-      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-        setSpeechError(
-          'Microphone permission blocked. Please enable mic access, type your stock sentence above, or use Google Chrome.'
-        )
-      } else if (event.error !== 'no-speech') {
-        setSpeechError(
-          'Voice input issue detected. Please type your stock sentence or try again.'
-        )
-      }
-    }
-
-    recognition.onend = () => {
-      setIsListening(false)
-    }
-
-    recognitionRef.current = recognition
-
-    return () => {
-      try {
-        recognition.abort()
-      } catch {
-        // ignore
-      }
-    }
-  }, [types, currentType])
-
-  // Toggle voice recognition
-  const toggleListening = () => {
-    setSpeechError(null)
-    const win = window as unknown as IWindowSpeechRecognition
-    const SpeechRec = win.SpeechRecognition || win.webkitSpeechRecognition
-
-    if (!SpeechRec) {
-      setSpeechError(
-        'Voice input is not supported in this browser. Please type the sentence above or use Google Chrome.'
-      )
-      return
-    }
-
-    if (isListening) {
-      try {
-        recognitionRef.current?.stop()
-      } catch {
-        // ignore
-      }
-      setIsListening(false)
-    } else {
-      try {
-        recognitionRef.current?.start()
-      } catch (err) {
-        console.error('Error starting recognition:', err)
-        try {
-          recognitionRef.current?.abort()
-          recognitionRef.current?.start()
-        } catch {
-          setSpeechError('Could not start microphone. Please type your sentence.')
-        }
-      }
-    }
-  }
-
-  // Parse sentence into Review Card
-  const handleTriggerParse = (textToParse: string) => {
-    if (!textToParse.trim()) return
-
-    const parsed: ParseResult = parseSentence(textToParse, {
-      existingTypes: types.map((t) => t.name),
-      selectedType: currentType ? currentType.name : undefined,
-    })
-
+  const handleFindJourney = (e: React.MouseEvent) => {
+    e.preventDefault()
     startTransition(() => {
-      setReviewType(parsed.type || '')
-      setReviewColour(parsed.colour || '')
-      setReviewSize(parsed.size || '')
-      setReviewQty(parsed.qty > 0 ? parsed.qty : 1)
-      setValidationErrors({})
-      setReviewOpen(true)
+      if ((currentUser && !currentUser.isAnonymous) || isUserLoggedIn(currentUser)) {
+        router.push('/availability')
+      } else {
+        router.push('/account?mode=register&redirect=/availability')
+      }
     })
   }
 
-  // Handle "Read" button click
-  const handleReadClick = () => {
-    if (!inputText.trim()) {
-      inputRef.current?.focus()
-      return
-    }
-    handleTriggerParse(inputText)
-  }
+  const findJourneyHref =
+    isMounted && ((currentUser && !currentUser.isAnonymous) || isUserLoggedIn(currentUser))
+      ? '/availability'
+      : '/account?mode=register&redirect=/availability'
 
-  // Validate review fields
-  const validateReview = (): boolean => {
-    const errors: { type?: string; size?: string; qty?: string } = {}
-    if (!reviewType.trim()) {
-      errors.type = 'Type is required'
-    }
-    if (!reviewSize.trim()) {
-      errors.size = 'Size is required'
-    }
-    if (typeof reviewQty !== 'number' || reviewQty <= 0 || !Number.isInteger(reviewQty)) {
-      errors.qty = 'Count must be a whole number greater than 0'
-    }
-
-    setValidationErrors(errors)
-    return Object.keys(errors).length === 0
-  }
-
-  // Save stock
-  const handleSaveStock = async () => {
-    if (!validateReview() || !user) return
-
-    try {
-      setIsSaving(true)
-      const existingCodes = types.map((t) => t.code)
-
-      const result = await saveStock({
-        type: reviewType,
-        colour: reviewColour,
-        size: reviewSize,
-        qty: Number(reviewQty),
-        userId: user.uid,
-        existingTypeCodes: existingCodes,
-      })
-
-      // Select newly saved type so owner immediately sees it
-      setSelectedTypeKey(result.typeKey)
-
-      // Typographic polish: proper apostrophes and the × and → symbols
-      const colourText = result.colour ? `${result.colour} · ` : ''
-      const successMsg = `Saved: ${result.qty} × ${result.typeName} · ${colourText}${result.size} → code ${result.itemCode}`
-
-      setFeedback({ type: 'success', message: successMsg })
-      setReviewOpen(false)
-      setInputText('')
-      setTimeout(() => {
-        inputRef.current?.focus()
-      }, 50)
-    } catch (err: unknown) {
-      console.error('Error saving stock:', err)
-      setFeedback({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Failed to save stock.',
-      })
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  // Cancel review card
-  const handleCancelReview = () => {
-    setReviewOpen(false)
-    setValidationErrors({})
-    inputRef.current?.focus()
-  }
-
-  // Handle Enter key inside review card
-  const handleReviewKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleSaveStock()
-    }
-  }
-
-  // +/- Count adjustments
-  const handleQtyAdjust = async (itemKey: string, delta: number) => {
-    if (!selectedTypeKey) return
-    try {
-      await adjustItemQty(selectedTypeKey, itemKey, delta)
-    } catch (err: unknown) {
-      console.error('Error adjusting quantity:', err)
-      setFeedback({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Could not adjust count.',
-      })
-    }
-  }
-
-  // Undo last save
-  const handleUndo = async () => {
-    try {
-      setUndoLoading(true)
-      const res = await undoLastEntry()
-      if (res.success) {
-        setFeedback({ type: 'info', message: res.message })
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth(async (user) => {
+      // Ignore anonymous sessions for "logged in" display
+      if (user && !user.isAnonymous) {
+        setCurrentUser(user)
+        try {
+          const { profile } = await fetchCurrentProfile()
+          if (profile?.name) setUserName(profile.name)
+        } catch {}
       } else {
-        setFeedback({ type: 'error', message: res.message })
+        setCurrentUser(null)
+        setUserName('')
       }
-    } catch (err: unknown) {
-      console.error('Error in undo:', err)
-      setFeedback({
-        type: 'error',
-        message: err instanceof Error ? err.message : 'Undo failed.',
+    })
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    const elements = document.querySelectorAll<HTMLElement>('.scroll-reveal')
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-visible')
+          observer.unobserve(entry.target)
+        }
       })
-    } finally {
-      setUndoLoading(false)
-    }
-  }
+    }, { threshold: 0.16, rootMargin: '0px 0px -8% 0px' })
+    elements.forEach((element) => observer.observe(element))
+    return () => observer.disconnect()
+  }, [])
 
-  // Type code editing
-  const handleStartEditCode = () => {
-    if (!currentType) return
-    setCodeEditValue(currentType.code)
-    setCodeEditError(null)
-    setIsEditingCode(true)
-  }
-
-  const handleSaveTypeCode = async () => {
-    if (!currentType) return
-    const clean = codeEditValue.trim().toUpperCase()
-    if (!clean) {
-      setCodeEditError('Code cannot be empty.')
-      return
-    }
-    if (!/^[A-Z0-9]+$/.test(clean)) {
-      setCodeEditError('Uppercase letters and digits only.')
-      return
-    }
-
-    try {
-      setCodeEditLoading(true)
-      await updateTypeCode(currentType.id, clean, types)
-      setIsEditingCode(false)
-      setFeedback({
-        type: 'success',
-        message: `Type code updated to ${clean}. Item codes regenerated.`,
-      })
-    } catch (err: unknown) {
-      setCodeEditError(err instanceof Error ? err.message : 'Failed to update code.')
-    } finally {
-      setCodeEditLoading(false)
-    }
-  }
-
-  // Group items for colour chips and size chart
-  const colourTotals: Record<string, number> = {}
-  const sizeTotals: Record<string, number> = {}
-
-  items.forEach((item) => {
-    const colName = item.colour || 'No Colour'
-    colourTotals[colName] = (colourTotals[colName] || 0) + item.qty
-
-    const sz = item.size || 'Unspecified'
-    sizeTotals[sz] = (sizeTotals[sz] || 0) + item.qty
-  })
-
-  // Loading screen during auth check
-  if (authLoading || !user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 border-3 border-foreground/30 border-t-foreground rounded-full animate-spin" />
-          <p className="text-sm text-muted-foreground">Loading United 18 Stock…</p>
-        </div>
-      </div>
-    )
+  const handleLogout = async () => {
+    await signOutUser()
+    setCurrentUser(null)
+    setUserName('')
+    setMenuOpen(false)
   }
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-background text-foreground transition-colors font-sans">
-      {/* ──────────────── LEFT SIDEBAR (Desktop) / TOP HORIZONTAL SCROLLBAR (Mobile) ──────────────── */}
-      <aside className="w-full md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-border bg-card/60 backdrop-blur-sm p-4 flex flex-col md:min-h-screen">
-        {/* Brand Header */}
-        <div className="flex items-center justify-between pb-3 md:pb-5 border-b border-border/80 mb-3">
-          <div className="flex items-center gap-2.5">
-            <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-foreground text-background font-black text-sm tracking-tighter">
-              U18
-            </span>
-            <div>
-              <h1 className="font-bold text-base tracking-tight leading-none">
-                United 18
-              </h1>
-              <p className="text-[11px] text-muted-foreground uppercase tracking-widest font-semibold mt-0.5">
-                Stock Manager
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => logout()}
-            title="Log out"
-            className="text-xs font-medium text-muted-foreground hover:text-foreground p-1.5 rounded-lg border border-border/60 hover:bg-muted transition-colors cursor-pointer"
-          >
-            Sign out
-          </button>
-        </div>
+    <main className="min-h-screen w-full max-w-full overflow-x-hidden bg-[#0B0F19] text-white">
 
-        {/* Sidebar Title */}
-        <div className="hidden md:flex items-center justify-between px-2 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          <span>Categories</span>
-          <span>{types.length}</span>
-        </div>
-
-        {/* Categories List / Mobile horizontal scroll */}
-        <div className="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-y-auto no-scrollbar py-1">
-          {/* "All Stock" Button */}
-          <button
-            onClick={() => setSelectedTypeKey(null)}
-            className={`shrink-0 flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer min-h-[44px] ${
-              selectedTypeKey === null
-                ? 'bg-foreground text-background shadow-sm font-semibold'
-                : 'bg-muted/50 hover:bg-muted text-foreground'
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <span>All stock</span>
-            </span>
+      <section id="top" className="hero-section relative isolate min-h-[820px] overflow-hidden lg:min-h-[920px] xl:min-h-[980px]">
+        <img src={heroImage} alt="Purple coach travelling along a mountain highway" className="hero-image absolute inset-0 h-full w-full object-cover object-center" />
+        <div className="hero-black-fade absolute inset-0 bg-black/40" />
+        <header className="home-header absolute inset-x-0 top-0 z-[60] flex items-center justify-between px-5 py-5 md:px-10 xl:px-16">
+          <Link href="/" className="flex items-center gap-2.5 text-white no-underline group" aria-label="Uday Travels Home">
             <span
-              className={`ml-3 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                selectedTypeKey === null
-                  ? 'bg-background/20 text-background'
-                  : 'bg-background/80 text-foreground border border-border/60'
-              }`}
+              className="brand-logo-mark w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-[#F8B018] text-[#0B0F19] font-black flex items-center justify-center font-sans tracking-tight text-xs sm:text-sm shadow-md shrink-0 group-hover:scale-105 transition-transform"
+              style={{ backgroundColor: '#F8B018', color: '#0B0F19', fontWeight: 900 }}
             >
-              {totalStockCount}
+              UT
             </span>
-          </button>
+            <span className="font-chakra text-lg sm:text-xl font-black uppercase tracking-tight text-white leading-none">
+              UDAY <span className="text-[#F8B018]">TRAVELS</span>
+            </span>
+          </Link>
 
-          {/* Types Buttons */}
-          {typesLoading ? (
-            <div className="text-xs text-muted-foreground py-2 px-3">
-              Loading types…
-            </div>
-          ) : types.length === 0 ? (
-            <div className="text-xs text-muted-foreground py-3 px-2 text-center">
-              No types added yet. Speak or type above to add!
-            </div>
-          ) : (
-            types.map((type) => {
-              const isSelected = selectedTypeKey === type.id
-              return (
-                <button
-                  key={type.id}
-                  onClick={() => setSelectedTypeKey(type.id)}
-                  className={`shrink-0 flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer min-h-[44px] ${
-                    isSelected
-                      ? 'bg-foreground text-background shadow-sm font-semibold'
-                      : 'bg-muted/50 hover:bg-muted text-foreground'
-                  }`}
-                >
-                  <span className="truncate text-left pr-2">{type.name}</span>
-                  <span
-                    className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      isSelected
-                        ? 'bg-background/20 text-background'
-                        : 'bg-background/80 text-foreground border border-border/60'
-                    }`}
-                  >
-                    {type.total}
-                  </span>
-                </button>
-              )
-            })
-          )}
-        </div>
-      </aside>
-
-      {/* ──────────────── MAIN CONTENT AREA ──────────────── */}
-      <main className="flex-1 p-4 md:p-8 max-w-5xl mx-auto w-full space-y-6">
-        {/* Feedback / Notification Banner */}
-        {feedback && (
-          <div
-            className={`p-4 rounded-xl text-sm font-medium flex items-center justify-between border transition-all ${
-              feedback.type === 'success'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-                : feedback.type === 'error'
-                ? 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300'
-                : 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300'
-            }`}
+          {/* Navigation Menu Trigger (Clean Hamburger Symbol) */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="flex items-center justify-center p-2 text-white hover:text-[#F8B018] bg-transparent border-0 cursor-pointer transition-colors shadow-none"
+            aria-label="Open navigation menu"
           >
-            <span>{feedback.message}</span>
-            <button
-              onClick={() => setFeedback(null)}
-              className="text-xs px-2 py-1 rounded hover:bg-foreground/10 cursor-pointer ml-3 shrink-0"
+            <Menu size={28} className="text-white hover:text-[#F8B018] stroke-[2.5] transition-colors" />
+          </button>
+        </header>
+
+        {/* Navigation Drawer matching User's Mockup in Yellow & Black Theme */}
+        {menuOpen && (
+          <div
+            className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex justify-end animate-in fade-in duration-200"
+            onClick={() => setMenuOpen(false)}
+          >
+            <aside
+              className="w-full max-w-sm sm:max-w-md bg-[#0B0F19] border-l border-[#F8B018]/25 text-white h-full shadow-2xl shadow-black flex flex-col justify-between overflow-y-auto animate-in slide-in-from-right duration-250 p-6 sm:p-7 relative z-[101]"
+              onClick={(e) => e.stopPropagation()}
             >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {/* ──────────────── TOP CARD: MIC + TEXT INPUT + READ + UNDO ──────────────── */}
-        <section className="bg-card border border-border rounded-2xl shadow-sm p-4 md:p-6 space-y-4">
-          <div className="flex flex-col sm:flex-row items-center gap-3">
-            {/* Round Mic Button */}
-            <button
-              type="button"
-              onClick={toggleListening}
-              title={isListening ? 'Stop listening' : 'Start speaking'}
-              className={`relative shrink-0 w-14 h-14 md:w-16 md:h-16 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-md active:scale-95 ${
-                isListening
-                  ? 'bg-red-600 text-white animate-pulse ring-4 ring-red-500/30'
-                  : 'bg-foreground text-background hover:opacity-90'
-              }`}
-            >
-              {isListening ? (
-                <span className="w-5 h-5 bg-white rounded-sm animate-ping" />
-              ) : (
-                <svg
-                  className="w-6 h-6 md:w-7 md:h-7 fill-current"
-                  viewBox="0 0 24 24"
-                >
-                  <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                  <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-                </svg>
-              )}
-            </button>
-
-            {/* Spoken / Typed Text Box */}
-            <div className="flex-1 w-full relative">
-              <input
-                ref={inputRef}
-                type="text"
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleReadClick()
-                  }
-                }}
-                placeholder="Say or type: pant grey 5 size 32"
-                className="w-full h-14 md:h-16 px-4 md:px-5 rounded-xl border border-input bg-background text-foreground text-base md:text-lg placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-foreground/20"
-              />
-              {isListening && (
-                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-semibold text-red-600 dark:text-red-400 animate-pulse bg-red-100 dark:bg-red-950/60 px-2 py-0.5 rounded-full">
-                  Listening…
-                </span>
-              )}
-            </div>
-
-            {/* Read Button */}
-            <button
-              type="button"
-              onClick={handleReadClick}
-              className="w-full sm:w-auto h-14 md:h-16 px-6 bg-foreground text-background font-semibold rounded-xl hover:opacity-90 active:scale-[0.98] transition cursor-pointer text-base shrink-0 flex items-center justify-center"
-            >
-              Read
-            </button>
-          </div>
-
-          {/* Fallback & speech error message banner */}
-          {speechError && (
-            <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs">
-              {speechError}
-            </div>
-          )}
-
-          {/* Quick info & Undo Button */}
-          <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
-            <span>
-              Spoken example: <span className="font-mono">pant grey 5 size 32</span>
-            </span>
-            <button
-              type="button"
-              onClick={handleUndo}
-              disabled={undoLoading}
-              className="text-xs font-semibold text-foreground/80 hover:text-foreground underline underline-offset-4 hover:no-underline disabled:opacity-50 cursor-pointer min-h-[36px] flex items-center gap-1"
-            >
-              {undoLoading ? 'Reversing…' : 'Undo last entry'}
-            </button>
-          </div>
-
-          {/* ──────────────── REVIEW CARD (Appears after reading) ──────────────── */}
-          {reviewOpen && (
-            <div className="mt-4 p-5 rounded-xl border border-border bg-muted/30 shadow-inner space-y-4">
-              <div className="flex items-center justify-between border-b border-border/80 pb-2">
-                <h3 className="font-semibold text-sm uppercase tracking-wider text-foreground">
-                  Review Stock Details
-                </h3>
-                <span className="text-xs text-muted-foreground">
-                  Press Enter or tap Save stock
-                </span>
-              </div>
-
-              <div
-                className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5"
-                onKeyDown={handleReviewKeyDown}
-              >
-                {/* Type Field */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Type <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    list="type-suggestions"
-                    value={reviewType}
-                    onChange={(e) => {
-                      setReviewType(e.target.value)
-                      if (validationErrors.type) {
-                        setValidationErrors((prev) => ({ ...prev, type: undefined }))
-                      }
-                    }}
-                    placeholder="e.g. Pant"
-                    className={`w-full px-3.5 py-2.5 rounded-lg border bg-background text-foreground text-sm focus:outline-none focus:ring-2 ${
-                      validationErrors.type
-                        ? 'border-red-500 ring-2 ring-red-500/20'
-                        : 'border-input focus:ring-foreground/20'
-                    }`}
-                  />
-                  <datalist id="type-suggestions">
-                    {types.map((t) => (
-                      <option key={t.id} value={t.name} />
-                    ))}
-                  </datalist>
-                  {validationErrors.type && (
-                    <p className="text-[11px] text-red-500 font-medium">
-                      {validationErrors.type}
-                    </p>
-                  )}
-                </div>
-
-                {/* Colour Field */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Colour
-                  </label>
-                  <input
-                    type="text"
-                    value={reviewColour}
-                    onChange={(e) => setReviewColour(e.target.value)}
-                    placeholder="e.g. Grey (optional)"
-                    className="w-full px-3.5 py-2.5 rounded-lg border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-foreground/20"
-                  />
-                </div>
-
-                {/* Size Field */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Size <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={reviewSize}
-                    onChange={(e) => {
-                      setReviewSize(e.target.value)
-                      if (validationErrors.size) {
-                        setValidationErrors((prev) => ({ ...prev, size: undefined }))
-                      }
-                    }}
-                    placeholder="e.g. 32 or M"
-                    className={`w-full px-3.5 py-2.5 rounded-lg border bg-background text-foreground text-sm focus:outline-none focus:ring-2 ${
-                      validationErrors.size
-                        ? 'border-red-500 ring-2 ring-red-500/20'
-                        : 'border-input focus:ring-foreground/20'
-                    }`}
-                  />
-                  {validationErrors.size && (
-                    <p className="text-[11px] text-red-500 font-medium">
-                      {validationErrors.size}
-                    </p>
-                  )}
-                </div>
-
-                {/* Count Field */}
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Count <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    step="1"
-                    value={reviewQty}
-                    onChange={(e) => {
-                      const v = e.target.value === '' ? '' : parseInt(e.target.value, 10)
-                      setReviewQty(v)
-                      if (validationErrors.qty) {
-                        setValidationErrors((prev) => ({ ...prev, qty: undefined }))
-                      }
-                    }}
-                    placeholder="Count"
-                    className={`w-full px-3.5 py-2.5 rounded-lg border bg-background text-foreground text-sm focus:outline-none focus:ring-2 ${
-                      validationErrors.qty
-                        ? 'border-red-500 ring-2 ring-red-500/20'
-                        : 'border-input focus:ring-foreground/20'
-                    }`}
-                  />
-                  {validationErrors.qty && (
-                    <p className="text-[11px] text-red-500 font-medium">
-                      {validationErrors.qty}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={handleCancelReview}
-                  className="px-4 py-2.5 rounded-xl border border-border text-sm font-medium hover:bg-muted text-foreground transition cursor-pointer min-h-[44px]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveStock}
-                  disabled={isSaving}
-                  className="px-6 py-2.5 rounded-xl bg-foreground text-background text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition cursor-pointer min-h-[44px] flex items-center gap-2"
-                >
-                  {isSaving ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-background/30 border-t-background rounded-full animate-spin" />
-                      Saving…
-                    </>
-                  ) : (
-                    'Save stock'
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-        </section>
-
-        {/* ──────────────── STOCK VIEW ──────────────── */}
-        {selectedTypeKey === null ? (
-          /* ──────── ALL STOCK VIEW: BAR CHART OF TOTAL PER TYPE ──────── */
-          <section className="bg-card border border-border rounded-2xl shadow-sm p-5 md:p-6 space-y-6">
-            <div className="flex items-center justify-between border-b border-border/80 pb-4">
               <div>
-                <h2 className="text-xl font-bold tracking-tight">All Stock</h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Total inventory across {types.length} category{types.length === 1 ? '' : 'ies'}
-                </p>
-              </div>
-              <div className="text-right">
-                <span className="text-2xl font-black">{totalStockCount}</span>
-                <span className="block text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  Total Units
-                </span>
-              </div>
-            </div>
-
-            {/* Bar Chart: Total Count Per Type */}
-            {types.length === 0 ? (
-              <div className="py-12 text-center text-muted-foreground text-sm">
-                No stock entries found. Tap the mic or type to add items.
-              </div>
-            ) : (
-              <div className="space-y-4 pt-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                  Stock by Category
-                </h3>
-                <div className="space-y-3">
-                  {types.map((t) => {
-                    const maxVal = Math.max(...types.map((x) => x.total), 1)
-                    const pct = Math.max(4, Math.round((t.total / maxVal) * 100))
-                    return (
-                      <div
-                        key={t.id}
-                        onClick={() => setSelectedTypeKey(t.id)}
-                        className="group flex flex-col gap-1 cursor-pointer p-2 rounded-xl hover:bg-muted/40 transition"
-                      >
-                        <div className="flex items-center justify-between text-sm font-medium">
-                          <span className="group-hover:text-foreground font-semibold">
-                            {t.name}{' '}
-                            <span className="text-xs font-mono text-muted-foreground">
-                              ({t.code})
-                            </span>
-                          </span>
-                          <span className="font-bold">{t.total}</span>
-                        </div>
-                        <div className="w-full h-4 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-foreground rounded-full transition-all duration-500 ease-out"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
+                {/* Clean Navigation Bar Top without duplicate logo */}
+                <div className="flex items-center justify-between pb-4 border-b border-white/10">
+                  <span className="text-xs uppercase font-extrabold tracking-widest text-[#F8B018] font-mono">
+                    Menu
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen(false)}
+                    className="p-1.5 -mr-1 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                    aria-label="Close menu"
+                  >
+                    <X size={20} />
+                  </button>
                 </div>
-              </div>
-            )}
-          </section>
-        ) : (
-          /* ──────── SELECTED TYPE VIEW: TOTAL, CHIPS, SIZE CHART, TABLE ──────── */
-          <section className="bg-card border border-border rounded-2xl shadow-sm p-5 md:p-6 space-y-6">
-            {/* Heading with Total & Editable Type Code */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/80 pb-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-2xl font-bold tracking-tight">
-                    {currentType?.name || selectedTypeKey}
-                  </h2>
-                  {/* Type Code Badge & In-place Edit */}
-                  {!isEditingCode ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-xs font-bold px-2.5 py-1 rounded-md bg-muted text-foreground border border-border/80">
-                        {currentType?.code}
-                      </span>
-                      <button
-                        onClick={handleStartEditCode}
-                        className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 cursor-pointer"
-                        title="Edit type code"
-                      >
-                        Edit
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={codeEditValue}
-                        onChange={(e) => setCodeEditValue(e.target.value.toUpperCase())}
-                        maxLength={6}
-                        placeholder="CODE"
-                        className="w-20 px-2 py-1 text-xs font-mono font-bold uppercase rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-foreground"
-                      />
-                      <button
-                        onClick={handleSaveTypeCode}
-                        disabled={codeEditLoading}
-                        className="text-xs px-2.5 py-1 rounded bg-foreground text-background font-semibold hover:opacity-90 cursor-pointer disabled:opacity-50"
-                      >
-                        Save
-                      </button>
-                      <button
-                        onClick={() => setIsEditingCode(false)}
-                        className="text-xs px-2 py-1 text-muted-foreground hover:text-foreground cursor-pointer"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {codeEditError && (
-                  <p className="text-xs text-red-500 font-medium">{codeEditError}</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  Category details & item variants
-                </p>
-              </div>
 
-              <div className="text-left sm:text-right">
-                <span className="text-3xl font-black">{currentType?.total || 0}</span>
-                <span className="block text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
-                  Total Items
-                </span>
-              </div>
-            </div>
-
-            {/* Colour Totals as Chips */}
-            <div className="space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Colours
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {Object.keys(colourTotals).length === 0 ? (
-                  <span className="text-xs text-muted-foreground">No colours yet</span>
-                ) : (
-                  Object.entries(colourTotals).map(([col, cnt]) => (
-                    <span
-                      key={col}
-                      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-foreground border border-border/80 shadow-xs"
+                {/* 1. Header Area: Log in to manage your bookings OR Profile */}
+                {!currentUser ? (
+                  <div className="pt-4 pb-5 space-y-3">
+                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight leading-snug">
+                      Log in to manage your bookings
+                    </h2>
+                    <Link
+                      href="/account"
+                      onClick={() => setMenuOpen(false)}
+                      className="w-full py-3.5 rounded-none bg-[#F8B018] hover:bg-[#ffbe2e] text-black font-extrabold text-sm sm:text-base shadow-lg shadow-[#F8B018]/25 hover:shadow-[#F8B018]/40 transition-all text-center block cursor-pointer active:scale-[0.99]"
                     >
-                      <span>{col}</span>
-                      <span className="px-1.5 py-0.2 rounded-full bg-foreground text-background font-bold text-[10px]">
-                        {cnt}
-                      </span>
-                    </span>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Bar Chart: Stock by Size */}
-            <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Stock by Size
-              </h3>
-              {Object.keys(sizeTotals).length === 0 ? (
-                <p className="text-xs text-muted-foreground">No size records yet.</p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {Object.entries(sizeTotals).map(([sz, count]) => {
-                    const maxSzVal = Math.max(...Object.values(sizeTotals), 1)
-                    const pct = Math.max(8, Math.round((count / maxSzVal) * 100))
-                    return (
-                      <div
-                        key={sz}
-                        className="p-3 rounded-xl border border-border/80 bg-muted/20 space-y-1.5"
+                      Log in
+                    </Link>
+                    <p className="text-xs sm:text-sm text-white/70">
+                      Don&apos;t have an account?{' '}
+                      <Link
+                        href="/account"
+                        onClick={() => setMenuOpen(false)}
+                        className="font-extrabold underline text-[#F8B018] hover:text-[#ffca58] transition-colors"
                       >
-                        <div className="flex items-center justify-between text-xs font-semibold">
-                          <span className="text-muted-foreground">Size {sz}</span>
-                          <span className="font-bold text-sm">{count}</span>
+                        Sign up
+                      </Link>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="pt-4 pb-5">
+                    <div className="p-4 bg-[#111827] border border-[#F8B018]/35 rounded-2xl flex items-center gap-3.5 shadow-lg shadow-black/40">
+                      <div className="w-11 h-11 rounded-full bg-[#F8B018] text-black font-black text-base flex items-center justify-center shadow-md shadow-[#F8B018]/30 shrink-0">
+                        {(userName || currentUser.displayName || 'P')[0]?.toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-extrabold text-sm text-white truncate">
+                          {userName || currentUser.displayName || 'Passenger'}
                         </div>
-                        <div className="w-full h-2.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-foreground rounded-full transition-all duration-300"
-                            style={{ width: `${pct}%` }}
-                          />
+                        <div className="text-xs text-[#F8B018] font-mono font-bold tracking-wide truncate">
+                          {currentUser.phoneNumber || currentUser.email || ''}
                         </div>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
+                    </div>
+                  </div>
+                )}
 
-            {/* Stock Items Table with − and + buttons */}
-            <div className="space-y-3 pt-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                Stock Breakdown & Adjustments
-              </h3>
+                {/* 2. Section: My details */}
+                <div className="space-y-1.5 pt-1">
+                  <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase text-[#F8B018] mb-2.5">
+                    My details
+                  </h3>
 
-              {itemsLoading ? (
-                <div className="py-8 text-center text-xs text-muted-foreground">
-                  Loading items…
+                  {/* Bookings -> Go to Availability Page */}
+                  <Link
+                    href="/availability"
+                    onClick={() => setMenuOpen(false)}
+                    className="bg-[#F8B018]/15 border border-[#F8B018]/45 hover:bg-[#F8B018]/25 text-white font-bold px-4 py-3 rounded-2xl flex items-center justify-between transition-all group cursor-pointer shadow-sm shadow-[#F8B018]/10"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <List size={18} className="text-[#F8B018] stroke-[2.4]" />
+                      <span className="text-sm font-bold text-white group-hover:text-[#F8B018] transition-colors">
+                        Bookings
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-[#F8B018] group-hover:translate-x-1 transition-transform" />
+                  </Link>
+
+                  {/* Personal information -> Profile Page */}
+                  <Link
+                    href="/account"
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-3 rounded-2xl flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.08] hover:border-[#F8B018]/30 border border-white/5 text-white/90 font-medium transition-all group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <UserRound size={18} className="text-[#F8B018]" />
+                      <span className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
+                        Personal information
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-white/40 group-hover:text-[#F8B018] group-hover:translate-x-1 transition-transform" />
+                  </Link>
                 </div>
-              ) : items.length === 0 ? (
-                <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
-                  No items in this category yet.
+
+                {/* Divider */}
+                <hr className="my-3.5 border-white/10" />
+
+                {/* 3. Section: Payments */}
+                <div className="space-y-1.5">
+                  <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase text-[#F8B018] mb-2.5">
+                    Payments
+                  </h3>
+
+                  {/* Uday Wallet -> Profile Page */}
+                  <Link
+                    href="/account"
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-3 rounded-2xl flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.08] hover:border-[#F8B018]/30 border border-white/5 text-white/90 font-medium transition-all group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <Wallet size={18} className="text-[#F8B018]" />
+                      <span className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
+                        Uday Wallet
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-white/40 group-hover:text-[#F8B018] group-hover:translate-x-1 transition-transform" />
+                  </Link>
+
+                  {/* Redeem gift card -> Renders No Gift Card Found */}
+                  <Link
+                    href="/gift-cards"
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-3 rounded-2xl flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.08] hover:border-[#F8B018]/30 border border-white/5 text-white/90 font-medium transition-all group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <Gift size={18} className="text-[#F8B018]" />
+                      <span className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
+                        Redeem gift card
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-white/40 group-hover:text-[#F8B018] group-hover:translate-x-1 transition-transform" />
+                  </Link>
                 </div>
-              ) : (
-                <div className="overflow-x-auto rounded-xl border border-border">
-                  <table className="w-full text-left text-sm border-collapse">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/40 text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                        <th className="py-3 px-4">Code</th>
-                        <th className="py-3 px-4">Colour</th>
-                        <th className="py-3 px-4">Size</th>
-                        <th className="py-3 px-4 text-center">Count</th>
-                        <th className="py-3 px-4 text-right">Correct</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {items.map((item) => (
-                        <tr
-                          key={item.id}
-                          className="hover:bg-muted/30 transition-colors"
-                        >
-                          <td className="py-3.5 px-4 font-mono font-bold text-xs text-foreground">
-                            {item.code}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            {item.colour || (
-                              <span className="text-muted-foreground italic text-xs">
-                                None
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-3.5 px-4 font-semibold">{item.size}</td>
-                          <td className="py-3.5 px-4 text-center font-bold text-base">
-                            {item.qty}
-                          </td>
-                          <td className="py-3.5 px-4 text-right">
-                            <div className="inline-flex items-center gap-1.5 justify-end">
-                              {/* Minus Button (never below 0) */}
-                              <button
-                                type="button"
-                                onClick={() => handleQtyAdjust(item.id, -1)}
-                                disabled={item.qty <= 0}
-                                title="Decrease count"
-                                className="w-10 h-10 rounded-lg border border-border flex items-center justify-center font-bold text-base hover:bg-muted active:scale-95 disabled:opacity-30 cursor-pointer"
-                              >
-                                −
-                              </button>
-                              {/* Plus Button */}
-                              <button
-                                type="button"
-                                onClick={() => handleQtyAdjust(item.id, 1)}
-                                title="Increase count"
-                                className="w-10 h-10 rounded-lg border border-border flex items-center justify-center font-bold text-base hover:bg-muted active:scale-95 cursor-pointer"
-                              >
-                                +
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+                {/* Divider */}
+                <hr className="my-3.5 border-white/10" />
+
+                {/* 4. Section: More */}
+                <div className="space-y-1.5">
+                  <h3 className="text-xs sm:text-sm font-extrabold tracking-wider uppercase text-[#F8B018] mb-2.5">
+                    More
+                  </h3>
+
+                  {/* Offers -> Renders No Offers Found */}
+                  <Link
+                    href="/offers"
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-3 rounded-2xl flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.08] hover:border-[#F8B018]/30 border border-white/5 text-white/90 font-medium transition-all group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <Tag size={18} className="text-[#F8B018]" />
+                      <span className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
+                        Offers & Discounts
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-white/40 group-hover:text-[#F8B018] group-hover:translate-x-1 transition-transform" />
+                  </Link>
+
+                  {/* Know about Uday Travels -> About Us Page */}
+                  <Link
+                    href="/about"
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-3 rounded-2xl flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.08] hover:border-[#F8B018]/30 border border-white/5 text-white/90 font-medium transition-all group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <Info size={18} className="text-[#F8B018]" />
+                      <span className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
+                        Know about Uday Travels
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-white/40 group-hover:text-[#F8B018] group-hover:translate-x-1 transition-transform" />
+                  </Link>
+
+                  {/* Help -> Help FAQ Page */}
+                  <Link
+                    href="/help"
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-3 rounded-2xl flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.08] hover:border-[#F8B018]/30 border border-white/5 text-white/90 font-medium transition-all group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <HelpCircle size={18} className="text-[#F8B018]" />
+                      <span className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
+                        Help & FAQs
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-white/40 group-hover:text-[#F8B018] group-hover:translate-x-1 transition-transform" />
+                  </Link>
+
+                  {/* Cancel Ticket & Refund Status */}
+                  <Link
+                    href="/bookings"
+                    onClick={() => setMenuOpen(false)}
+                    className="px-4 py-3 rounded-2xl flex items-center justify-between bg-white/[0.03] hover:bg-white/[0.08] hover:border-[#F8B018]/30 border border-white/5 text-white/90 font-medium transition-all group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <RotateCcw size={18} className="text-[#F8B018]" />
+                      <span className="text-sm font-medium text-white/90 group-hover:text-white transition-colors">
+                        Cancel Ticket & Refund Status
+                      </span>
+                    </div>
+                    <ChevronRight size={18} className="text-white/40 group-hover:text-[#F8B018] group-hover:translate-x-1 transition-transform" />
+                  </Link>
                 </div>
-              )}
-            </div>
-          </section>
+              </div>
+
+              {/* Bottom Footer Area */}
+              <div className="pt-5 mt-5 border-t border-white/10">
+                {currentUser ? (
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-[#F8B018] bg-[#F8B018]/10 hover:bg-[#F8B018]/20 border border-[#F8B018]/30 transition-all cursor-pointer"
+                  >
+                    <LogOut size={16} /> Logout
+                  </button>
+                ) : (
+                  <div className="text-center text-xs text-white/50 flex items-center justify-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#F8B018]" />
+                    <span className="font-bold text-white/80">Uday Travels</span>
+                    <span>&bull;</span>
+                    <span className="text-white/50">Pune &harr; Ahilyanagar</span>
+                  </div>
+                )}
+              </div>
+            </aside>
+          </div>
         )}
-      </main>
-    </div>
+
+        <div className="absolute inset-x-0 bottom-0 h-52 bg-gradient-to-t from-[#0B0F19] to-transparent" />
+
+        <div className="hero-content relative mx-auto flex min-h-[820px] max-w-[1440px] items-end px-5 pb-14 pt-32 md:px-10 md:pb-20 md:pt-40 xl:min-h-[980px] xl:px-16">
+          <div className="grid w-full grid-cols-1 gap-12 lg:grid-cols-12 lg:items-end">
+            <div className="lg:col-span-8">
+              <p className="mb-7 flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#FF9D00]"><span className="h-px w-9 bg-[#FF9D00]" /> Pune → Ahilyanagar</p>
+              <h1 className="hero-title max-w-5xl font-chakra font-black text-[clamp(4.2rem,10.2vw,10.5rem)] uppercase leading-[.84] tracking-[-.03em]">
+                <span className="hero-title-inner">
+                  MAKE THE<br /><span className="text-[#FF9D00]">ROAD</span><br /><span className="text-[#FF9D00]">YOURS.</span>
+                </span>
+              </h1>
+              <p className="mt-8 max-w-md text-base leading-7 text-white/70 md:text-lg">Thoughtfully timed, quietly comfortable, always moving.</p>
+              <a
+                href={findJourneyHref}
+                onClick={handleFindJourney}
+                suppressHydrationWarning
+                className="relative z-20 mt-10 inline-flex h-16 items-center gap-7 rounded-none bg-[#FF9D00] hover:bg-[#FFAE26] px-8 text-base sm:text-lg font-black uppercase tracking-wider text-[#0B0F19] shadow-[0_12px_36px_rgba(255,157,0,0.35)] transition-all hover:-translate-y-1 hover:shadow-[0_16px_40px_rgba(255,157,0,0.45)] active:scale-[0.98] cursor-pointer"
+                style={{ fontFamily: "'Chakra Petch', sans-serif" }}
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 size={22} className="animate-spin text-[#0B0F19]" />
+                    <span>Loading journey...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Find your journey</span>
+                    <ArrowUpRight size={22} className="stroke-[3]" />
+                  </>
+                )}
+              </a>
+            </div>
+
+            <div className="hidden lg:col-span-4 lg:flex flex-col justify-end items-end text-right border-l border-white/10 pl-8 pb-3">
+              <div className="space-y-4">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 block">Next departure</span>
+                  <div className="font-mono text-2xl font-black text-white mt-0.5">
+                    06:40 <span className="text-xs font-normal text-white/60">AM</span>
+                  </div>
+                </div>
+                <div className="pt-3 border-t border-white/10">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/50 block">Travel time</span>
+                  <div className="text-xs text-white/80 mt-0.5 font-medium">
+                    02h 45m <span className="text-white/40">/</span> <span className="text-white/60 text-[11px]">via NH60</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="absolute bottom-8 right-5 hidden items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-white/50 md:flex xl:right-16"><CircleHelp size={14} /> Need a hand?</div>
+      </section>
+
+      {/* DARK THEME STATS SECTION - Live Network Metrics with Count-up Animation */}
+      <DarkThemeStatsSection />
+
+      {/* EDITORIAL INFORMATION SECTION - Pure White Theme with Clean Alternating Layout */}
+      <section className="w-full bg-white border-t border-gray-100">
+        <AlternatingInfoSection />
+      </section>
+
+      {/* FOOTER - Authentic Black Theme Footer with 4 Columns & Dot Matrix */}
+      <BlackThemeFooter />
+    </main>
   )
 }
+

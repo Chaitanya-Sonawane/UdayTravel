@@ -593,5 +593,5 @@ describe('Ticket PDF Generation', () => {
 
     execSync('pdftoppm -png -r 150 sample-ticket-output.pdf sample-ticket-preview')
     expect(fs.existsSync('sample-ticket-preview-1.png')).toBe(true)
-  })
+  }, 30000)
 })

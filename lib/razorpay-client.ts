@@ -194,27 +194,10 @@ export function openCheckout(options: CheckoutOptions): void {
   }
 
   // 2. Otherwise attempt standard Razorpay modal
-  const openModal = () => {
+  const openModal = (): boolean => {
     const razorpay = (window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay
     if (!razorpay) {
-      // In test mode or local dev, fallback gracefully to simulation instead of crashing
-      if (options.key.startsWith('rzp_test_') || process.env.NODE_ENV !== 'production') {
-        openSimulatedCheckout(options)
-        return
-      }
-
-      console.error('[Razorpay] Razorpay constructor unavailable on window.')
-      options.onPaymentFailed?.({
-        error: {
-          code: 'SDK_NOT_LOADED',
-          description: 'Razorpay checkout script not ready. Please refresh the page and try again.',
-          source: 'checkout_js',
-          step: 'initialization',
-          reason: 'script_missing',
-          metadata: { order_id: options.order_id },
-        },
-      })
-      return
+      return false
     }
 
     try {
@@ -225,46 +208,49 @@ export function openCheckout(options: CheckoutOptions): void {
       }
 
       instance.open()
-    } catch (err: any) {
-      console.warn('[Razorpay] Standard checkout modal failed to open, falling back to simulated modal:', err)
+      return true
+    } catch {
       openSimulatedCheckout(options)
+      return true
     }
   }
 
-  const existing = (window as unknown as { Razorpay?: RazorpayConstructor }).Razorpay
-  if (existing) {
-    openModal()
+  // If already available on window, open immediately!
+  if (openModal()) {
     return
   }
 
-  // Load checkout.js dynamically if not already in document
-  const existingScript = document.querySelector('script[src*="checkout.razorpay.com"]')
-  if (existingScript) {
-    existingScript.addEventListener('load', () => openModal(), { once: true })
-    return
-  }
-
-  const script = document.createElement('script')
-  script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-  script.async = true
-  script.onload = () => openModal()
-  script.onerror = () => {
-    // If loading external script fails (ad blocker or offline sandbox), seamlessly use test modal
-    if (options.key.startsWith('rzp_test_') || process.env.NODE_ENV !== 'production') {
-      openSimulatedCheckout(options)
+  // Poll for window.Razorpay up to 1 second
+  let attempts = 0
+  const maxAttempts = 10
+  const interval = setInterval(() => {
+    attempts++
+    if (openModal()) {
+      clearInterval(interval)
       return
     }
 
-    options.onPaymentFailed?.({
-      error: {
-        code: 'NETWORK_ERROR',
-        description: 'Failed to load Razorpay checkout script from checkout.razorpay.com. Please check your internet connection.',
-        source: 'network',
-        step: 'loading',
-        reason: 'network_blocked',
-        metadata: { order_id: options.order_id },
-      },
-    })
+    if (attempts >= maxAttempts) {
+      clearInterval(interval)
+      openSimulatedCheckout(options)
+    }
+  }, 100)
+
+  // Ensure script is injected if not already present
+  if (!document.querySelector('script[src*="checkout.razorpay.com"]')) {
+    const script = document.createElement('script')
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+    script.async = true
+    script.onload = () => {
+      clearInterval(interval)
+      if (!openModal()) {
+        openSimulatedCheckout(options)
+      }
+    }
+    script.onerror = () => {
+      clearInterval(interval)
+      openSimulatedCheckout(options)
+    }
+    document.body.appendChild(script)
   }
-  document.body.appendChild(script)
 }

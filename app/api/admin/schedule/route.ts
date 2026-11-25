@@ -1,12 +1,15 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminDb } from '@/lib/firebase/admin'
 import { firestoreMeter } from '@/lib/firebase/meter'
 import { DEFAULT_BUSES, BusesRepository } from '@/lib/data/buses.repo'
+import { TripsRepository } from '@/lib/data/trips.repo'
 import { getBusTemplate, getTemplateForBus, BUS_TEMPLATES, BusTemplateId } from '@/lib/domain/seats/bus-templates'
 import { RouteId, ROUTES } from '@/lib/config/routes'
 import { BASE_FARE_INR } from '@/lib/config/rules'
 import { AvailabilityDoc } from '@/lib/schema/availability'
+import { SeatsRepository } from '@/lib/data/seats.repo'
 
 const CreateScheduleSchema = z.object({
   routeId: z.string().refine((val): val is RouteId => val in ROUTES, {
@@ -71,6 +74,88 @@ export async function GET(req: Request) {
       })
     }
 
+    // Also query trips collection for this date & route
+    try {
+      const tripsSnap = await db
+        .collection('trips')
+        .where('travelDate', '==', date)
+        .where('routeId', '==', routeId)
+        .get()
+
+      tripsSnap.docs.forEach((doc) => {
+        const t = doc.data() as any
+        const tId = t.tripId || t.id
+        if (t.status !== 'cancelled' && !tripsList.some((existing) => existing.tripId === tId)) {
+          tripsList.push({
+            tripId: tId,
+            busId: t.busId || 'bus_mh16dp4951',
+            busName: t.busName || 'Uday Express',
+            busNumber: t.busNumber || 'MH 16 DP 4951',
+            templateId: t.templateId || (t.totalSeats === 44 ? 'BUS_44' : t.totalSeats === 33 ? 'BUS_33' : 'BUS_55'),
+            departureTime: t.departureTime,
+            arrivalTime: t.arrivalTime,
+            fare: t.fare || 200,
+            booked: Array.isArray(t.bookedSeats) ? t.bookedSeats.length : 0,
+            totalSeats: t.totalSeats || 50,
+            totalCapacity: t.totalSeats || 50,
+            seatsLeft: typeof t.availableSeats === 'number' ? t.availableSeats : 50,
+            status: t.status || 'active',
+          })
+        }
+      })
+    } catch (err) {
+      console.warn('[Admin Schedule GET] Notice querying trips collection:', err)
+    }
+
+    // If still empty for this date, fetch default/existing trips via TripsRepository
+    if (tripsList.length === 0) {
+      try {
+        const repoTrips = await TripsRepository.getTripsByDate(date, routeId)
+        repoTrips.forEach((t) => {
+          const tId = t.tripId || t.id
+          if (t.status !== 'cancelled' && !tripsList.some((existing) => existing.tripId === tId)) {
+            tripsList.push({
+              tripId: tId,
+              busId: t.busId || 'bus_mh16dp4951',
+              busName: t.busName || 'Uday Express',
+              busNumber: t.busNumber || 'MH 16 DP 4951',
+              templateId: (t as any).templateId || (t.totalSeats === 44 ? 'BUS_44' : t.totalSeats === 33 ? 'BUS_33' : 'BUS_55'),
+              departureTime: t.departureTime,
+              arrivalTime: t.arrivalTime || addMinutesToTime(t.departureTime, 195),
+              fare: t.fare || 200,
+              booked: Array.isArray(t.bookedSeats) ? t.bookedSeats.length : 0,
+              totalSeats: t.totalSeats || 50,
+              totalCapacity: t.totalSeats || 50,
+              seatsLeft: typeof t.availableSeats === 'number' ? t.availableSeats : 50,
+              status: t.status || 'available',
+            })
+          }
+        })
+      } catch (err) {
+        console.warn('[Admin Schedule GET] Fallback TripsRepository notice:', err)
+      }
+    }
+
+    // Enrich trips with authoritative live seat_public booking data
+    await Promise.all(
+      tripsList.map(async (t) => {
+        try {
+          const pubMap = await SeatsRepository.getSeatPublic(t.tripId, date)
+          const takenKeys = Object.keys(pubMap.taken || {})
+          if (takenKeys.length > 0) {
+            t.booked = takenKeys.length
+            t.bookedSeats = takenKeys
+            t.seatsLeft = Math.max(0, (t.totalSeats || 55) - takenKeys.length)
+          }
+        } catch {
+          // ignore individual seat fetch errors
+        }
+      })
+    )
+
+    // Sort chronologically
+    tripsList.sort((a, b) => (a.departureTime || '').localeCompare(b.departureTime || ''))
+
     return NextResponse.json({
       success: true,
       routeId,
@@ -78,6 +163,7 @@ export async function GET(req: Request) {
       buses,
       templates: BUS_TEMPLATES,
       trips: tripsList,
+      scheduledTrips: tripsList,
     })
   } catch (err: any) {
     console.warn('[Admin Schedule GET Error]:', err)
@@ -186,6 +272,11 @@ export async function POST(req: Request) {
       ...existingCustom.filter((t) => t.tripId !== tripId),
       tripItem,
     ]
+    const existingTripsObj = existingAvail?.trips || {}
+    const updatedTripsObj = {
+      ...existingTripsObj,
+      [tripId]: tripItem,
+    }
 
     await availRef.set(
       {
@@ -193,6 +284,7 @@ export async function POST(req: Request) {
         date,
         weekday: new Date(`${date}T12:00:00+05:30`).toLocaleDateString('en-US', { weekday: 'long' }),
         customTrips: updatedCustom,
+        trips: updatedTripsObj,
         updatedAt: isoNow,
       },
       { merge: true }
@@ -259,6 +351,8 @@ export async function POST(req: Request) {
       tripId,
       docId,
       trip: tripItem,
+      trips: updatedCustom,
+      scheduledTrips: updatedCustom,
       message: `✓ Route scheduled for ${date}! Assigned ${busName} (${busNumber}, ${templateId}) with ${totalCapacity} seats.`,
     })
   } catch (err: any) {

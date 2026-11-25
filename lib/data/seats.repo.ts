@@ -150,7 +150,7 @@ export class SeatsRepository {
       // Clean expired holds in return payload
       const cleanedHeld: Record<string, { gender: Gender; expiresAt: number }> = {}
       for (const [s, h] of Object.entries(data.held || {})) {
-        if (h.expiresAt > now) {
+        if (h && typeof h === 'object' && typeof h.expiresAt === 'number' && h.expiresAt > now) {
           cleanedHeld[s] = h
         }
       }
@@ -252,10 +252,12 @@ export class SeatsRepository {
       if (!evalRes.ok) {
         const freshMap = buildPublicDoc({ ...currentDoc, seats: cleanedSeats, departureAt }, now)
         const appErr = new AppError(
-          evalRes.code === 'ADJACENT_CONSENT_REQUIRED'
+          evalRes.code === 'ADJACENT_CONSENT_REQUIRED' || evalRes.code === 'SEAT_GENDER_ZONE'
             ? ErrorCodes.INVALID_INPUT
             : ErrorCodes.SEAT_UNAVAILABLE,
-          `Seat selection failed rule evaluation: ${evalRes.code} for seat ${evalRes.seatId || ''}`,
+          evalRes.code === 'SEAT_GENDER_ZONE'
+            ? `Male and female passengers cannot sit next to each other on adjacent seats (Seat ${evalRes.seatId || ''}).`
+            : `Seat selection failed rule evaluation: ${evalRes.code} for seat ${evalRes.seatId || ''}`,
           { code: evalRes.code, seatId: evalRes.seatId, freshMap }
         )
         throw appErr

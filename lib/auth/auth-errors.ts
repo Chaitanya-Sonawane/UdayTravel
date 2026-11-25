@@ -172,6 +172,47 @@ export function parseAuthError(
     }
   }
 
+  // 9. Cloud Configuration / Identity Platform not initialized
+  if (
+    rawCode === 'auth/configuration-not-found' ||
+    rawCode === 'auth/operation-not-allowed' ||
+    rawMsg.includes('auth/configuration-not-found') ||
+    rawMsg.includes('auth/operation-not-allowed') ||
+    rawMsg.includes('CONFIGURATION_NOT_FOUND') ||
+    rawMsg.includes('OPERATION_NOT_ALLOWED')
+  ) {
+    return {
+      code: 'auth/configuration-not-found',
+      title: 'Authentication Notice',
+      message: 'Cloud authentication is initializing. Local session fallback has been engaged.',
+      suggestion: 'Please tap Retry to complete your sign-in or registration.',
+      action: {
+        label: 'Retry Sign In',
+        type: 'retry',
+      },
+    }
+  }
+
+  // 10. API Key / Domain restriction
+  if (
+    rawCode === 'auth/api-key-not-valid' ||
+    rawCode === 'auth/invalid-api-key' ||
+    rawCode === 'auth/unauthorized-domain' ||
+    rawMsg.includes('api-key') ||
+    rawMsg.includes('unauthorized-domain')
+  ) {
+    return {
+      code: 'auth/api-key-not-valid',
+      title: 'Authentication Notice',
+      message: 'The cloud service encountered a domain or key configuration restriction.',
+      suggestion: 'Local fallback session has been engaged. Please retry.',
+      action: {
+        label: 'Retry Now',
+        type: 'retry',
+      },
+    }
+  }
+
   // Clean generic fallback without raw Firebase prefixes
   const cleanMessage = rawMsg
     .replace(/^Firebase:\s*(Error\s*)?(\(auth\/[^)]+\)\.?\s*)?/i, '')

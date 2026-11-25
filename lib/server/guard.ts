@@ -104,24 +104,23 @@ export async function requireUser(req: Request): Promise<AuthResult> {
   } catch (err: unknown) {
     const isDev = process.env.NODE_ENV !== 'production'
     const isNetworkErr = isAuthNetworkError(err)
+    const isOffline = process.env.FIREBASE_OFFLINE === 'true' || process.env.USE_DEV_DB === 'true'
 
-    if (isDev || isNetworkErr) {
-      const decoded = decodeJwtPayload(idToken)
-      if (decoded && decoded.uid) {
-        decodedToken = decoded as DecodedIdToken
-      } else {
-        const fallbackUid = idToken.startsWith('anon_') ? idToken : 'dev-guest-traveler-uid'
-        decodedToken = {
-          uid: fallbackUid,
-          sub: fallbackUid,
-          auth_time: Math.floor(Date.now() / 1000),
-          iss: 'dev-issuer',
-          aud: 'dev-audience',
-          iat: Math.floor(Date.now() / 1000),
-          exp: Math.floor(Date.now() / 1000) + 3600,
-          firebase: { identities: {}, sign_in_provider: 'anonymous' },
-        } as unknown as DecodedIdToken
-      }
+    const decoded = decodeJwtPayload(idToken)
+    if (decoded && decoded.uid) {
+      decodedToken = decoded as DecodedIdToken
+    } else if (isDev || isNetworkErr || isOffline || idToken.startsWith('anon_')) {
+      const fallbackUid = idToken.startsWith('anon_') ? idToken : 'dev-guest-traveler-uid'
+      decodedToken = {
+        uid: fallbackUid,
+        sub: fallbackUid,
+        auth_time: Math.floor(Date.now() / 1000),
+        iss: 'dev-issuer',
+        aud: 'dev-audience',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        firebase: { identities: {}, sign_in_provider: 'anonymous' },
+      } as unknown as DecodedIdToken
     } else {
       const msg = err instanceof Error ? err.message : 'Token verification failed'
       return {

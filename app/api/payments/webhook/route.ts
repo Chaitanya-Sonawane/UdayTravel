@@ -6,6 +6,8 @@ import { OrdersRepository } from '@/lib/data/orders.repo'
 import { RefundsRepository } from '@/lib/data/refunds.repo'
 import { getAdminDb } from '@/lib/firebase/admin'
 
+export const runtime = 'nodejs'
+
 export async function POST(req: Request) {
   const signature = req.headers.get('x-razorpay-signature')
   if (!signature) {

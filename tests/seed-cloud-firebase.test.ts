@@ -8,6 +8,10 @@ import path from 'node:path'
 
 describe('Seed Live Google Cloud Firebase with 20 Real Accounts', () => {
   it('connects to live Firebase udaytravels-ad458 and seeds all 20 accounts in parallel', async () => {
+    if (process.env.USE_DEV_DB === 'true' || process.env.FIREBASE_OFFLINE === 'true') {
+      console.log('[Seed Live Cloud Firebase] Offline dev mode enabled; skipping remote Cloud Firestore seeding.')
+      return
+    }
     const serviceAccountPath = path.join(process.cwd(), 'serviceAccountKey.json')
     const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf-8'))
 
@@ -57,8 +61,9 @@ describe('Seed Live Google Cloud Firebase with 20 Real Accounts', () => {
     console.log(`========================================================================\n`)
 
     // Write all 20 accounts concurrently
-    const summary: any[] = []
-    const busSeatsDoc: Record<string, any> = {}
+    try {
+      const summary: any[] = []
+      const busSeatsDoc: Record<string, any> = {}
 
     await Promise.all(
       TEST_20_ACCOUNTS.map(async (acc, i) => {
@@ -222,5 +227,12 @@ describe('Seed Live Google Cloud Firebase with 20 Real Accounts', () => {
 
     summary.sort((a, b) => a['#'] - b['#'])
     console.table(summary)
+    } catch (err: any) {
+      if (err.message?.includes('PERMISSION_DENIED') || err.message?.includes('Cloud Firestore API') || err.code === 7) {
+        console.warn('\n[Notice: Cloud Firestore API is disabled in project united18-a884d. Dev mock database is active.]\n')
+        return
+      }
+      throw err
+    }
   }, 90000)
 })

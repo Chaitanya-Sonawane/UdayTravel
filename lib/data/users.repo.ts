@@ -20,6 +20,57 @@ export class UsersRepository {
     }
   }
 
+  static async findUserByMobileOrEmail(identifier: string): Promise<UserProfile | null> {
+    const clean = identifier.trim().toLowerCase()
+    const isMobile = /^[6-9]\d{9}$/.test(clean)
+    const mobileToFind = isMobile ? clean : clean.replace(/\D/g, '').slice(-10)
+    const emailToFind = clean.includes('@') ? clean : `${mobileToFind}@udaytravel.in`
+
+    const db = getAdminDb()
+    firestoreMeter.recordRead(this.collectionName, 'query')
+
+    // 1. Try querying by mobile
+    if (mobileToFind) {
+      try {
+        const snap = await db.collection(this.collectionName).where('mobile', '==', mobileToFind).limit(1).get()
+        if (!snap.empty && snap.docs[0]) {
+          const doc = snap.docs[0]
+          return { ...(doc.data() as UserProfile), uid: doc.id }
+        }
+      } catch (err) {
+        console.warn('[UsersRepository] Query by mobile fallback:', err)
+      }
+    }
+
+    // 2. Try querying by email
+    try {
+      const snap = await db.collection(this.collectionName).where('email', '==', emailToFind).limit(1).get()
+      if (!snap.empty && snap.docs[0]) {
+        const doc = snap.docs[0]
+        return { ...(doc.data() as UserProfile), uid: doc.id }
+      }
+    } catch (err) {
+      console.warn('[UsersRepository] Query by email fallback:', err)
+    }
+
+    // 3. Fallback scan in local dev store
+    try {
+      const snap = await db.collection(this.collectionName).get()
+      for (const doc of snap.docs) {
+        const data = doc.data() as any
+        if (
+          (mobileToFind && data.mobile === mobileToFind) ||
+          (data.email && data.email.toLowerCase() === emailToFind) ||
+          doc.id === identifier
+        ) {
+          return { ...data, uid: doc.id }
+        }
+      }
+    } catch {}
+
+    return null
+  }
+
   static async createUser(uid: string, input: AccountCreateInput): Promise<UserProfile> {
     firestoreMeter.recordWrite(this.collectionName, uid)
     const db = getAdminDb()
@@ -44,6 +95,7 @@ export class UsersRepository {
       gender: input.gender,
       email: input.email || '',
       savedPassengers,
+      passwordHash: (input as any).passwordHash,
       createdAt: now,
       updatedAt: now,
     }

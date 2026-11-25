@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextRequest } from 'next/server'
 import { seatBus, SeatUpdatePayload } from '@/lib/server/realtime-bus'
 

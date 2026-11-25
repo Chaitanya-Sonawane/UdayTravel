@@ -37,7 +37,6 @@ export default function HelpCenter() {
   const [category, setCategory] = useState<'all' | HelpCategory>('all')
   const [query, setQuery] = useState('')
   const [openQuestion, setOpenQuestion] = useState(questions[0]?.question ?? '')
-  const [showMobileTopics, setShowMobileTopics] = useState(false)
 
   const filteredQuestions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -48,8 +47,6 @@ export default function HelpCenter() {
     })
   }, [category, query])
   const activeCategory = categories.find((item) => item.id === category)?.label ?? 'All questions'
-  const activeCategoryItem = categories.find((item) => item.id === category) ?? categories[0]
-  const ActiveCategoryIcon = activeCategoryItem?.icon ?? CircleHelp
 
   const handleCategorySelect = (id: 'all' | HelpCategory) => {
     setCategory(id)
@@ -61,9 +58,19 @@ export default function HelpCenter() {
   }
 
   return (
-    <main className="help-page">
+    <main className="help-page font-jakarta">
       <header className="help-header">
-        <Link href="/" className="help-brand" aria-label="Uday Travels home"><span className="help-brand-mark">UT</span><span>UDAY TRAVELS</span></Link>
+        <Link href="/" className="help-brand flex items-center gap-2.5 group" aria-label="Uday Travels home">
+          <span
+            className="brand-logo-mark w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#F8B018] text-[#0B0F19] font-black flex items-center justify-center font-sans tracking-tight text-xs shadow-xs transition-transform group-hover:scale-105 shrink-0"
+            style={{ backgroundColor: '#F8B018', color: '#0B0F19', fontWeight: 900 }}
+          >
+            UT
+          </span>
+          <span className="font-black text-sm tracking-widest text-[#171711] group-hover:text-black transition-colors font-sans">
+            UDAY TRAVELS
+          </span>
+        </Link>
         <Link href="/availability" className="help-book-link">Plan a trip <ArrowUpRight size={15} aria-hidden="true" /></Link>
       </header>
 
@@ -94,69 +101,6 @@ export default function HelpCenter() {
           <div className="help-faq-heading">
             <div><p className="help-kicker">ANSWERS FOR THE ROAD AHEAD</p><h2 id="faq-title">Frequently asked<br className="help-title-break" /> questions<span>.</span></h2></div>
             <div className="help-support-stamp"><Headset size={21} aria-hidden="true" /><span>Uday support<small>Always in your corner</small></span></div>
-          </div>
-
-          {/* MOBILE TOPIC SELECTOR */}
-          <div className="help-mobile-topic-bar">
-            <div className="help-mobile-topic-header">
-              <span className="help-mobile-topic-kicker">SUPPORT TOPIC</span>
-              <button 
-                type="button" 
-                className="help-mobile-topic-toggle"
-                onClick={() => setShowMobileTopics(!showMobileTopics)}
-                aria-expanded={showMobileTopics}
-              >
-                {showMobileTopics ? 'Close topics' : 'View all topics (8)'}
-              </button>
-            </div>
-            
-            <div className="help-mobile-select-wrap">
-              <ActiveCategoryIcon size={18} className="help-mobile-select-icon" aria-hidden="true" />
-              <select
-                id="help-mobile-category-select"
-                value={category}
-                onChange={(event) => {
-                  handleCategorySelect(event.target.value as any)
-                  setShowMobileTopics(false)
-                }}
-                className="help-mobile-select"
-                aria-label="Filter questions by topic"
-              >
-                {categories.map(({ id, label }) => {
-                  const count = id === 'all' ? questions.length : questions.filter(q => q.category === id).length
-                  return (
-                    <option key={id} value={id}>
-                      {label} ({count} answers)
-                    </option>
-                  )
-                })}
-              </select>
-              <ChevronDown size={16} className="help-mobile-chevron" aria-hidden="true" />
-            </div>
-
-            {showMobileTopics && (
-              <div className="help-mobile-topics-grid">
-                {categories.map(({ id, label, icon: Icon }) => {
-                  const isSelected = category === id && !query
-                  const count = id === 'all' ? questions.length : questions.filter(q => q.category === id).length
-                  return (
-                    <button
-                      key={id}
-                      type="button"
-                      className={`help-mobile-grid-btn ${isSelected ? 'active' : ''}`}
-                      onClick={() => {
-                        handleCategorySelect(id)
-                        setShowMobileTopics(false)
-                      }}
-                    >
-                      <Icon size={16} aria-hidden="true" />
-                      <span className="help-mobile-grid-label">{label}</span>
-                      <span className="help-mobile-grid-count">{count}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
           </div>
 
           <label className="help-search"><Search size={18} aria-hidden="true" /><span className="sr-only">Search help questions</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search for an answer..." /></label>

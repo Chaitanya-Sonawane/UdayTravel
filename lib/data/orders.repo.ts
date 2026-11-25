@@ -17,6 +17,13 @@ export class OrdersRepository {
     return snap.data() as OrderDoc
   }
 
+  static async getOrderByRazorpayId(razorpayOrderId: string): Promise<OrderDoc | null> {
+    const db = getAdminDb()
+    const snap = await db.collection('orders').where('razorpayOrderId', '==', razorpayOrderId).limit(1).get()
+    if (snap.empty || !snap.docs[0]) return null
+    return snap.docs[0].data() as OrderDoc
+  }
+
   static async updateOrder(grp: string, updates: Partial<OrderDoc>): Promise<void> {
     firestoreMeter.recordWrite('orders', grp)
     const db = getAdminDb()

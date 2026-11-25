@@ -85,13 +85,14 @@ describe('Seat Rules Engine (Pure Domain)', () => {
   })
 
   describe('Ladder levels: levelFor', () => {
-    it('returns Level 0 for any free seat', () => {
+    it('returns Level 0 for free seats without opposite gender neighbours', () => {
       const seats: Record<string, SeatState> = {
         A1: { state: 'CONFIRMED', gender: 'F' },
       }
-      // Any free seat is open (level 0) for male or female
+      // A2 is adjacent to A1 (Female): open for Female (0), but blocked for Male (null)
       expect(levelFor(seats, 'A2', 'F', tFarBefore, baseDeparture)).toBe(0)
-      expect(levelFor(seats, 'A2', 'M', tFarBefore, baseDeparture)).toBe(0)
+      expect(levelFor(seats, 'A2', 'M', tFarBefore, baseDeparture)).toBeNull()
+      // B1 is in a different row: open for Male (0)
       expect(levelFor(seats, 'B1', 'M', tFarBefore, baseDeparture)).toBe(0)
     })
 
@@ -126,7 +127,7 @@ describe('Seat Rules Engine (Pure Domain)', () => {
       }
     })
 
-    it('allows passengers of different genders in the same zone freely', () => {
+    it('rejects booking when opposite genders are assigned adjacent seats in same request', () => {
       const seats: Record<string, SeatState> = {}
       const res = evaluate(
         seats,
@@ -141,10 +142,92 @@ describe('Seat Rules Engine (Pure Domain)', () => {
         tFarBefore,
         baseDeparture
       )
+      expect(res.ok).toBe(false)
+      if (!res.ok) {
+        expect(res.code).toBe('SEAT_GENDER_ZONE')
+      }
+    })
+
+    it('allows male and female passengers of the same account/booking to select adjacent seats when family: true', () => {
+      const seats: Record<string, SeatState> = {}
+      const res = evaluate(
+        seats,
+        {
+          family: true,
+          acceptAdjacent: false,
+          pax: [
+            { seatId: 'A1', gender: 'M', age: 25 },
+            { seatId: 'A2', gender: 'F', age: 25 },
+          ],
+        },
+        tFarBefore,
+        baseDeparture
+      )
+      expect(res.ok).toBe(true)
+      if (res.ok) {
+        expect(res.levels['A1']).toBe(0)
+        expect(res.levels['A2']).toBe(0)
+      }
+    })
+
+    it('still rejects adjacent seat when adjacent to an unrelated stranger of opposite gender even when family: true', () => {
+      const seats: Record<string, SeatState> = {
+        A1: { state: 'CONFIRMED', gender: 'M' },
+      }
+      const res = evaluate(
+        seats,
+        {
+          family: true,
+          acceptAdjacent: false,
+          pax: [{ seatId: 'A2', gender: 'F', age: 25 }],
+        },
+        tFarBefore,
+        baseDeparture
+      )
+      expect(res.ok).toBe(false)
+      if (!res.ok) {
+        expect(res.code).toBe('SEAT_GENDER_ZONE')
+        expect(res.seatId).toBe('A2')
+      }
+    })
+
+    it('allows same gender passengers on adjacent seats', () => {
+      const seats: Record<string, SeatState> = {}
+      const res = evaluate(
+        seats,
+        {
+          family: false,
+          acceptAdjacent: false,
+          pax: [
+            { seatId: 'A1', gender: 'F', age: 25 },
+            { seatId: 'A2', gender: 'F', age: 28 },
+          ],
+        },
+        tFarBefore,
+        baseDeparture
+      )
       expect(res.ok).toBe(true)
     })
 
-    it('allows booking next to existing passengers of opposite gender freely', () => {
+    it('allows opposite genders across the aisle (not neighbours)', () => {
+      const seats: Record<string, SeatState> = {}
+      const res = evaluate(
+        seats,
+        {
+          family: false,
+          acceptAdjacent: false,
+          pax: [
+            { seatId: 'A2', gender: 'M', age: 25 },
+            { seatId: 'A3', gender: 'F', age: 25 },
+          ],
+        },
+        tFarBefore,
+        baseDeparture
+      )
+      expect(res.ok).toBe(true)
+    })
+
+    it('strictly rejects male booking adjacent to existing confirmed female seat', () => {
       const seats: Record<string, SeatState> = {
         A1: { state: 'CONFIRMED', gender: 'F' },
       }
@@ -158,7 +241,32 @@ describe('Seat Rules Engine (Pure Domain)', () => {
         tFarBefore,
         baseDeparture
       )
-      expect(res.ok).toBe(true)
+      expect(res.ok).toBe(false)
+      if (!res.ok) {
+        expect(res.code).toBe('SEAT_GENDER_ZONE')
+        expect(res.seatId).toBe('A2')
+      }
+    })
+
+    it('strictly rejects female booking adjacent to existing confirmed male seat', () => {
+      const seats: Record<string, SeatState> = {
+        A1: { state: 'CONFIRMED', gender: 'M' },
+      }
+      const res = evaluate(
+        seats,
+        {
+          family: false,
+          acceptAdjacent: false,
+          pax: [{ seatId: 'A2', gender: 'F', age: 25 }],
+        },
+        tFarBefore,
+        baseDeparture
+      )
+      expect(res.ok).toBe(false)
+      if (!res.ok) {
+        expect(res.code).toBe('SEAT_GENDER_ZONE')
+        expect(res.seatId).toBe('A2')
+      }
     })
 
     it('rejects when requested seat is already booked', () => {
@@ -202,13 +310,13 @@ describe('Seat Rules Engine (Pure Domain)', () => {
 
     it('suggests family blocks fitting family size with zero orphan seats', () => {
       const seats: Record<string, SeatState> = {}
-      // 2 pax family
+      // 2 pax family (same gender: can sit in adjacent double seat 1 and 2)
       const sug2 = suggestSeats(
         seats,
         {
           family: true,
           pax: [
-            { gender: 'M', age: 30 },
+            { gender: 'F', age: 30 },
             { gender: 'F', age: 28 },
           ],
         },
@@ -222,13 +330,29 @@ describe('Seat Rules Engine (Pure Domain)', () => {
       expect(sug2[0]!.seatIds[0]!.endsWith('1')).toBe(true)
       expect(sug2[0]!.seatIds[1]!.endsWith('2')).toBe(true)
 
-      // 3 pax family
-      const sug3 = suggestSeats(
+      // 2 pax mixed-gender companions: suggested across the central aisle (2 and 3)
+      const sug2Mixed = suggestSeats(
         seats,
         {
           family: true,
           pax: [
             { gender: 'M', age: 30 },
+            { gender: 'F', age: 28 },
+          ],
+        },
+        tFarBefore,
+        baseDeparture
+      )
+      expect(sug2Mixed.length).toBeGreaterThan(0)
+      expect(sug2Mixed[0]!.seatIds).toEqual(['A2', 'A3'])
+
+      // 3 pax same-gender family
+      const sug3 = suggestSeats(
+        seats,
+        {
+          family: true,
+          pax: [
+            { gender: 'F', age: 30 },
             { gender: 'F', age: 28 },
             { gender: 'F', age: 6 },
           ],

@@ -38,7 +38,7 @@ const rows55: BusSeatRow[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].map((
   rightSeats: [`${row}3`, `${row}4`, `${row}5`],
 }))
 
-const front55 = ['1', '2', '3', '4'] // Front cabin arrangement
+const front55: string[] = [] // Front cabin 1 2 3 4 removed per specification
 const rear55 = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6'] // 6-seat rear bench
 
 const allSeats55 = [

@@ -11,6 +11,7 @@ import type { RtdbSeatState, RtdbTrackingState } from './rtdb-client'
 
 function getAdminRtdbSafe() {
   if (typeof window !== 'undefined') return null
+  if (process.env.USE_DEV_DB === 'true' || process.env.FIREBASE_OFFLINE === 'true') return null
   try {
     const { getAdminRtdb } = require('./admin')
     return getAdminRtdb()
@@ -20,6 +21,16 @@ function getAdminRtdbSafe() {
 }
 
 const DEFAULT_HOLD_TTL_MS = 10 * 60 * 1000 // 10 minutes
+
+const inMemoryRtdbSeats = new Map<string, RtdbSeatState>()
+
+function isOfflineRtdb() {
+  return (
+    process.env.USE_DEV_DB === 'true' ||
+    process.env.FIREBASE_OFFLINE === 'true' ||
+    process.env.NODE_ENV === 'test'
+  )
+}
 
 const withRtdbTimeout = <T>(promise: Promise<T>, ms = 1500): Promise<T> =>
   Promise.race([
@@ -43,6 +54,38 @@ export async function holdSeatInRtdb(params: {
   const { tripId, seatId, userId, gender, holdTtlMs = DEFAULT_HOLD_TTL_MS } = params
   const now = Date.now()
   const holdUntil = now + holdTtlMs
+
+  if (isOfflineRtdb()) {
+    const key = `${tripId}/${seatId}`
+    const current = inMemoryRtdbSeats.get(key)
+    if (!current || current.status === 'available') {
+      const seat: RtdbSeatState = {
+        status: 'held',
+        userId,
+        gender: gender || 'Male',
+        holdUntil,
+        updatedAt: now,
+      }
+      inMemoryRtdbSeats.set(key, seat)
+      return { success: true, seat }
+    }
+    if (current.status === 'held') {
+      const isExpired = current.holdUntil && current.holdUntil <= now
+      const isSameUser = current.userId === userId
+      if (isExpired || isSameUser) {
+        const seat: RtdbSeatState = {
+          status: 'held',
+          userId,
+          gender: gender || current.gender || 'Male',
+          holdUntil,
+          updatedAt: now,
+        }
+        inMemoryRtdbSeats.set(key, seat)
+        return { success: true, seat }
+      }
+    }
+    return { success: false, reason: 'SEAT_ALREADY_RESERVED' }
+  }
 
   try {
     // 1. Try Admin RTDB first (for server contexts)
@@ -150,6 +193,16 @@ export async function releaseSeatInRtdb(params: {
   const { tripId, seatId, userId } = params
   const now = Date.now()
 
+  if (isOfflineRtdb()) {
+    const key = `${tripId}/${seatId}`
+    const current = inMemoryRtdbSeats.get(key)
+    if (current && current.status === 'held' && (current.userId === userId || !current.userId)) {
+      inMemoryRtdbSeats.set(key, { status: 'available', updatedAt: now })
+      return true
+    }
+    return false
+  }
+
   try {
     const adminDb = getAdminRtdbSafe()
     if (adminDb) {
@@ -220,10 +273,6 @@ export async function bookSeatInRtdb(params: {
   const { tripId, seatId, userId, ticketNo, bookingId, gender } = params
   const now = Date.now()
 
-  if (process.env.NODE_ENV === 'test') {
-    return true
-  }
-
   const payload: RtdbSeatState = {
     status: 'booked',
     userId,
@@ -231,6 +280,11 @@ export async function bookSeatInRtdb(params: {
     bookingId,
     gender: gender || 'Male',
     updatedAt: now,
+  }
+
+  if (isOfflineRtdb()) {
+    inMemoryRtdbSeats.set(`${tripId}/${seatId}`, payload)
+    return true
   }
 
   try {
@@ -313,6 +367,17 @@ export async function cancelSeatsInRtdb(params: {
  * Reads all seat states for a given trip from RTDB.
  */
 export async function getTripSeatsFromRtdb(tripId: string): Promise<Record<string, RtdbSeatState>> {
+  if (isOfflineRtdb()) {
+    const result: Record<string, RtdbSeatState> = {}
+    const prefix = `${tripId}/`
+    inMemoryRtdbSeats.forEach((val, key) => {
+      if (key.startsWith(prefix)) {
+        const sId = key.slice(prefix.length)
+        result[sId] = val
+      }
+    })
+    return result
+  }
   try {
     const adminDb = getAdminRtdbSafe()
     if (adminDb) {

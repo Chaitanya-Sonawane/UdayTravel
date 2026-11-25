@@ -228,6 +228,84 @@ export async function issueRazorpayRefund(params: {
 }
 
 // For compatibility with tests or callers expecting getRazorpayClient
+export interface RazorpayPaymentItem {
+  id: string
+  entity: string
+  amount: number
+  currency: string
+  status: string
+  order_id: string | null
+  invoice_id: string | null
+  international: boolean
+  method: string
+  amount_refunded: number
+  refund_status: string | null
+  captured: boolean
+  description: string | null
+  card_id: string | null
+  bank: string | null
+  wallet: string | null
+  vpa: string | null
+  email: string | null
+  contact: string | null
+  notes: Record<string, any>
+  fee: number | null
+  tax: number | null
+  error_code: string | null
+  error_description: string | null
+  created_at: number
+  card?: {
+    id: string
+    entity: string
+    name: string
+    last4: string
+    network: string
+    type: string
+    issuer: string
+    international: boolean
+    emi: boolean
+    sub_type: string
+  }
+}
+
+export async function listRazorpayPayments(params?: {
+  count?: number
+  skip?: number
+  from?: number
+  to?: number
+}): Promise<{ items: RazorpayPaymentItem[]; count: number }> {
+  const { authHeader } = getRazorpayAuth()
+
+  try {
+    const query = new URLSearchParams()
+    if (params?.count) query.set('count', String(params.count))
+    if (params?.skip) query.set('skip', String(params.skip))
+    if (params?.from) query.set('from', String(params.from))
+    if (params?.to) query.set('to', String(params.to))
+
+    const res = await fetch(`https://api.razorpay.com/v1/payments?${query.toString()}`, {
+      method: 'GET',
+      headers: {
+        Authorization: authHeader,
+      },
+    })
+
+    if (!res.ok) {
+      console.warn(`[Razorpay List Payments API]: HTTP ${res.status}`)
+      return { items: [], count: 0 }
+    }
+
+    const data = await res.json()
+    return {
+      items: Array.isArray(data.items) ? data.items : [],
+      count: Number(data.count) || 0,
+    }
+  } catch (err: unknown) {
+    console.warn('[Razorpay List Payments Warning]: Offline or network issue, returning empty list')
+    return { items: [], count: 0 }
+  }
+}
+
 export function getRazorpayClient(): any {
   return {
     orders: {

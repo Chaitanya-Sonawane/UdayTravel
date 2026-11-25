@@ -1,5 +1,4 @@
-import { getApps, initializeApp, cert } from 'firebase-admin/app'
-import { getAuth } from 'firebase-admin/auth'
+import * as admin from 'firebase-admin'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -16,14 +15,14 @@ async function main() {
 
   const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, 'utf8'))
 
-  if (!getApps().length) {
-    initializeApp({
-      credential: cert(serviceAccount),
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
       projectId: serviceAccount.project_id,
     })
   }
 
-  const auth = getAuth()
+  const auth = admin.auth()
 
   try {
     const existing = await auth.getUserByEmail(email)

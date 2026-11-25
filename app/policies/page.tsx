@@ -1,82 +1,194 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, ShieldCheck, FileText, RefreshCw, AlertTriangle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { ArrowLeft, ShieldCheck, FileText, RefreshCw, AlertTriangle, ArrowUpRight } from 'lucide-react'
+import { subscribeToAuth, hasDeviceAccount, isUserLoggedIn } from '@/lib/auth/client-auth'
+import { User } from 'firebase/auth'
 
 export default function PoliciesPage() {
-  return (
-    <main className="min-h-screen bg-[#0B0F19] text-white">
-      <header className="border-b border-white/10 px-5 py-5 md:px-10 flex items-center justify-between">
-        <Link href="/" className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors">
-          <ArrowLeft size={18} /> Back to home
-        </Link>
-        <span className="font-bold tracking-widest text-[#F8B018]">UDAY POLICIES</span>
-      </header>
+  const router = useRouter()
+  const [openPolicy, setOpenPolicy] = useState<string | null>('01')
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [deviceHasAccount, setDeviceHasAccount] = useState<boolean>(false)
 
-      <section className="max-w-3xl mx-auto px-5 py-12 md:py-16 space-y-10">
-        <div>
-          <span className="text-xs uppercase tracking-widest text-[#F8B018] font-semibold">Authoritative Guidelines</span>
-          <h1 className="text-3xl md:text-5xl font-black uppercase mt-2">Terms & Policies</h1>
-          <p className="text-white/60 mt-3 text-sm md:text-base">
-            Transparent, fair, and reliable terms designed to protect our passengers and ensure a dependable journey.
+  useEffect(() => {
+    setDeviceHasAccount(hasDeviceAccount())
+    const unsub = subscribeToAuth((u) => {
+      if (u && !u.isAnonymous) setCurrentUser(u)
+      else setCurrentUser(null)
+    })
+    return () => unsub()
+  }, [])
+
+  const handleBookJourney = (e: React.MouseEvent) => {
+    e.preventDefault()
+    if ((currentUser && !currentUser.isAnonymous) || isUserLoggedIn(currentUser)) {
+      router.push('/availability')
+    } else {
+      router.push('/account?mode=register&redirect=/availability')
+    }
+  }
+
+  const togglePolicy = (id: string) => {
+    setOpenPolicy((prev) => (prev === id ? null : id))
+  }
+
+  const policies = [
+    {
+      id: '01',
+      hash: 'cancellation',
+      title: 'Cancellation & 25/75 Refund Policy',
+      content: (
+        <div className="space-y-4 text-neutral-300 text-sm md:text-base leading-relaxed">
+          <ul className="space-y-3 list-disc list-inside">
+            <li><strong className="text-white">25% Bank/UPI Refund:</strong> Directly returned to your original payment method (Bank account or UPI) within 3-5 business days.</li>
+            <li><strong className="text-white">75% Instant Wallet Credit:</strong> Credited immediately to your Uday Travels Wallet with no expiry, usable on any future booking.</li>
+            <li><strong className="text-white">₹50 Fee Per Seat:</strong> A ₹50 per-seat cancellation charge may apply on eligible cancellations.</li>
+            <li><strong className="text-white">2-Hour Cutoff Window:</strong> Cancellations are permitted until exactly 2 hours prior to scheduled coach departure.</li>
+            <li><strong className="text-white">Departure Cutoff:</strong> Cancellations requested within 2 hours of departure or after the bus has departed are non-refundable.</li>
+          </ul>
+        </div>
+      ),
+    },
+    {
+      id: '02',
+      hash: 'gender-safety',
+      title: 'Gender Safety & Seating Rules',
+      content: (
+        <div className="space-y-4 text-neutral-300 text-sm md:text-base leading-relaxed">
+          <ul className="space-y-3 list-disc list-inside">
+            <li><strong className="text-white">Women-Only Priority:</strong> When a female passenger books a seat on a bench, adjacent unreserved seats are strictly reserved for female co-passengers.</li>
+            <li><strong className="text-white">Family Mode Exemption:</strong> Verified families or couples travelling together are permitted to sit adjacent to one another.</li>
+            <li><strong className="text-white">Zero Unrelated Mixed Seating:</strong> Unrelated male and female passengers will never be assigned adjacent seats.</li>
+          </ul>
+        </div>
+      ),
+    },
+    {
+      id: '03',
+      hash: 'terms',
+      title: 'Boarding, Luggage & Identity Proof (Terms of Service)',
+      content: (
+        <div className="space-y-4 text-neutral-300 text-sm md:text-base leading-relaxed">
+          <ul className="space-y-3 list-disc list-inside">
+            <li><strong className="text-white">Reporting Time:</strong> Passengers must report at the selected pick-up location at least 15 minutes before the scheduled boarding time.</li>
+            <li><strong className="text-white">Digital Boarding Pass:</strong> Please present your digital e-ticket with the tamper-evident QR code to the conductor on boarding.</li>
+            <li><strong className="text-white">Valid ID Proof:</strong> Passengers must carry a government-approved identity proof matching the ticket manifest name.</li>
+            <li><strong className="text-white">Luggage Allowance:</strong> Up to 15 kg of personal luggage is permitted per passenger. Hazardous goods are strictly prohibited.</li>
+          </ul>
+        </div>
+      ),
+    },
+    {
+      id: '04',
+      hash: 'privacy',
+      title: 'Privacy & Data Integrity',
+      content: (
+        <div className="space-y-4 text-neutral-300 text-sm md:text-base leading-relaxed">
+          <p>
+            Uday Travels collects passenger details solely for ticketing, safety, boarding verification, and customer assistance. We never sell, rent, or share passenger personal data with third-party advertisers. All payment transactions are processed through PCI-DSS Level 1 compliant Razorpay encryption.
           </p>
         </div>
+      ),
+    },
+  ]
 
-        <div className="space-y-8">
-          <article className="border border-white/10 rounded-lg p-6 bg-white/[0.02]">
-            <div className="flex items-center gap-3 text-lg font-bold text-white mb-3">
-              <RefreshCw className="text-[#F8B018]" size={22} />
-              <h2>1. Cancellation & Store Credit Refund Policy</h2>
-            </div>
-            <ul className="space-y-2 text-sm text-white/70 leading-relaxed list-disc list-inside">
-              <li><strong>100% Wallet Refund:</strong> If cancelled at least 2 hours before scheduled departure, 100% of the ticket fare is immediately credited to your Uday Travels Store Credit Wallet.</li>
-              <li><strong>Zero Cancellation Deductions:</strong> No cancellation charges or platform penalty fees are levied.</li>
-              <li><strong>Instant Usability:</strong> Store credit wallet balances can be used immediately toward any future booking on any route.</li>
-              <li><strong>Departure Cutoff:</strong> Cancellations requested within 2 hours of scheduled departure or after bus departure are non-refundable.</li>
-            </ul>
-          </article>
+  return (
+    <main className="min-h-screen bg-[#0B0F19] text-white font-jakarta">
+      <header className="border-b border-white/10 bg-[#0B0F19]/90 px-5 py-5 md:px-10 flex items-center justify-between sticky top-0 z-30 backdrop-blur-md">
+        <Link href="/" className="inline-flex items-center gap-2 text-xs font-semibold text-neutral-400 hover:text-white transition-colors">
+          <ArrowLeft size={16} /> Back to home
+        </Link>
+        <Link href="/" className="inline-flex items-center gap-2.5 group" title="Uday Travels Home">
+          <span className="w-7 h-7 rounded-lg bg-[#F8B018] text-[#0B0F19] font-black flex items-center justify-center text-[11px] tracking-wider shadow-md shadow-[#F8B018]/25 transition-transform group-hover:scale-105" style={{ backgroundColor: '#F8B018', color: '#0B0F19', fontWeight: 900 }}>
+            UT
+          </span>
+          <span className="font-mono font-bold tracking-widest text-xs uppercase text-[#F8B018] group-hover:text-white transition-colors">
+            UDAY TRAVELS POLICIES
+          </span>
+        </Link>
+      </header>
 
-          <article className="border border-white/10 rounded-lg p-6 bg-white/[0.02]">
-            <div className="flex items-center gap-3 text-lg font-bold text-white mb-3">
-              <ShieldCheck className="text-[#F8B018]" size={22} />
-              <h2>2. Gender Safety & Seating Rules</h2>
-            </div>
-            <ul className="space-y-2 text-sm text-white/70 leading-relaxed list-disc list-inside">
-              <li><strong>Women-Only Priority:</strong> When a woman passenger books a seat on a bench, adjacent unreserved seats are strictly reserved for female co-passengers.</li>
-              <li><strong>Family Mode Exemption:</strong> Verified families or couples travelling together are permitted to sit adjacent to one another.</li>
-              <li><strong>Zero Unrelated Mixed Seating:</strong> Unrelated male and female passengers will never be assigned adjacent seats.</li>
-            </ul>
-          </article>
-
-          <article className="border border-white/10 rounded-lg p-6 bg-white/[0.02]">
-            <div className="flex items-center gap-3 text-lg font-bold text-white mb-3">
-              <FileText className="text-[#F8B018]" size={22} />
-              <h2>3. Boarding, Luggage & Identity Proof</h2>
-            </div>
-            <ul className="space-y-2 text-sm text-white/70 leading-relaxed list-disc list-inside">
-              <li><strong>Reporting Time:</strong> Passengers must report at the selected pick-up location at least 15 minutes before the scheduled boarding time.</li>
-              <li><strong>Digital Boarding Pass:</strong> Please present your digital e-ticket with the tamper-evident QR code to the driver/conductor on boarding.</li>
-              <li><strong>Valid ID Proof:</strong> Passengers must carry a government-approved identity proof (Aadhaar, Voter ID, Driving Licence) matching the ticket manifest name.</li>
-              <li><strong>Luggage Allowance:</strong> Up to 15 kg of personal luggage is permitted per passenger. Hazardous, flammable, or offensive goods are strictly prohibited.</li>
-            </ul>
-          </article>
-
-          <article className="border border-white/10 rounded-lg p-6 bg-white/[0.02]">
-            <div className="flex items-center gap-3 text-lg font-bold text-white mb-3">
-              <AlertTriangle className="text-[#F8B018]" size={22} />
-              <h2>4. Privacy & Data Integrity</h2>
-            </div>
-            <p className="text-sm text-white/70 leading-relaxed">
-              Uday Travels collects passenger details solely for ticketing, safety, boarding verification, and customer assistance. We never sell, rent, or share passenger personal data with third-party advertisers. All payment transactions are processed through PCI-DSS Level 1 compliant Razorpay encryption.
+      <section className="max-w-[1440px] w-full mx-auto px-5 py-12 md:py-20 md:px-10 xl:px-16 space-y-12">
+        <div className="border-b border-white/10 pb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <span className="text-xs uppercase tracking-widest text-[#F8B018] font-mono font-bold block mb-2">Authoritative Guidelines</span>
+            <h1 className="text-3xl sm:text-4xl md:text-6xl font-black uppercase text-white font-[family-name:var(--font-archivo)] tracking-tight">
+              Terms &amp; Policies
+            </h1>
+            <p className="text-neutral-400 mt-3 text-sm md:text-base max-w-2xl leading-relaxed">
+              Transparent, fair, and reliable terms designed to protect our passengers and ensure a dependable journey.
             </p>
-          </article>
+          </div>
+          <a
+            href={(currentUser && !currentUser.isAnonymous) || deviceHasAccount ? '/availability' : '/account?mode=register&redirect=/availability'}
+            onClick={handleBookJourney}
+            className="bg-[#F8B018] text-[#0B0F19] font-bold px-5 py-3 rounded-xl hover:bg-[#ffb020] transition-colors inline-flex items-center gap-2 text-xs shadow-md shrink-0 self-start md:self-auto cursor-pointer"
+          >
+            Book a Journey <ArrowUpRight size={15} />
+          </a>
         </div>
 
-        <div className="pt-6 border-t border-white/10 flex items-center justify-between">
-          <span className="text-xs text-white/40">Last updated: November 2026</span>
-          <Link href="/availability" className="bg-[#F8B018] text-[#0B0F19] text-xs font-bold px-4 py-2 rounded-sm hover:bg-[#ffb020] transition-colors">
-            Book a Journey
-          </Link>
+        {/* Minimalist Dark Accordion List */}
+        <div className="border-t border-white/10">
+          {policies.map((p) => {
+            const isOpen = openPolicy === p.id
+            return (
+              <div key={p.id} id={p.hash} className="border-b border-white/10 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => togglePolicy(p.id)}
+                  className="w-full py-5 md:py-6 flex items-center justify-between text-left group cursor-pointer select-none transition-colors"
+                  aria-expanded={isOpen}
+                >
+                  <div className="flex items-center gap-4 sm:gap-6 min-w-0 pr-4">
+                    <span className={`font-mono text-xs sm:text-sm font-semibold transition-colors shrink-0 ${
+                      isOpen ? 'text-[#F8B018] font-bold' : 'text-white/40 group-hover:text-white/80'
+                    }`}>
+                      {p.id}
+                    </span>
+                    <span className={`text-base sm:text-lg md:text-xl font-bold tracking-tight truncate transition-colors ${
+                      isOpen ? 'text-white' : 'text-neutral-300 group-hover:text-white'
+                    }`}>
+                      {p.title}
+                    </span>
+                  </div>
+
+                  <div
+                    className={`w-2.5 h-2.5 rounded-full shrink-0 transition-all duration-300 ${
+                      isOpen
+                        ? 'bg-[#F8B018] ring-4 ring-[#F8B018]/30 scale-125'
+                        : 'bg-white/20 group-hover:bg-white/40'
+                    }`}
+                  />
+                </button>
+
+                <div className={`accordion-content-grid ${isOpen ? 'is-open' : ''}`}>
+                  <div className="accordion-content-inner">
+                    <div className="pl-8 sm:pl-12 md:pl-14 pr-2 pb-8 pt-2">
+                      {p.content}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="pt-8 border-t border-white/10 flex items-center justify-between text-xs text-neutral-400">
+          <div className="flex items-center gap-2.5">
+            <span className="w-5 h-5 bg-[#F8B018] text-[#0B0F19] font-black rounded flex items-center justify-center text-[10px]">UT</span>
+            <span>Last updated: November 2026</span>
+          </div>
+          <a
+            href={(currentUser && !currentUser.isAnonymous) || deviceHasAccount ? '/availability' : '/account?mode=register&redirect=/availability'}
+            onClick={handleBookJourney}
+            className="text-[#F8B018] hover:text-[#ffb020] font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
+          >
+            Book a Journey <ArrowUpRight size={14} />
+          </a>
         </div>
       </section>
     </main>

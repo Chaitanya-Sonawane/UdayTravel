@@ -31,6 +31,7 @@ export type BookingJourney = {
   departure: string
   arrival: string
   fare: number
+  duration?: string
 }
 
 type BookingState = {
@@ -196,7 +197,20 @@ export const useBookingStore = create<BookingState>()(
     }),
     {
       name: 'uday-booking-store',
-      storage: createJSONStorage(() => (typeof window !== 'undefined' ? window.sessionStorage : (null as any))),
+      storage: createJSONStorage(() => {
+        if (typeof window !== 'undefined') {
+          return window.sessionStorage
+        }
+        return {
+          getItem: () => null,
+          setItem: () => {},
+          removeItem: () => {},
+        }
+      }),
     }
   )
 )
+
+if (typeof window !== 'undefined') {
+  ;(window as any).__BOOKING_STORE__ = useBookingStore
+}

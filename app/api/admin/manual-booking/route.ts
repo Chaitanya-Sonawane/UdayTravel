@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminDb } from '@/lib/firebase/admin'
@@ -9,6 +10,7 @@ import { generateQrToken } from '@/lib/payments/signature'
 import { bookSeatsInRtdb } from '@/lib/firebase/rtdb'
 import { TicketDoc } from '@/lib/schemas/ticket.schema'
 import { AppError, ErrorCodes } from '@/lib/errors/app-error'
+import { neighbours } from '@/lib/domain/seats/rules'
 
 const ManualPassengerSchema = z.object({
   seat: z.string().min(1, 'Seat ID is required'),
@@ -83,7 +85,7 @@ export async function POST(req: Request) {
   } = parseResult.data
 
   const db = getAdminDb()
-  const ticketNo = TicketsRepository.generateTicketNo()
+  const ticketNo = TicketsRepository.generateTicketNo(routeId)
   const grp = `manual_${Date.now()}_${ticketNo}`
   const nowIso = new Date().toISOString()
   const perSeatPaise = Math.round(farePerSeat * 100)
@@ -135,7 +137,7 @@ export async function POST(req: Request) {
     payment: {
       method: paymentMethod === 'CASH' ? 'Cash at Counter' : paymentMethod === 'COUNTER_UPI' ? 'Counter UPI QR' : 'Admin Pass',
       paidAt: nowIso,
-      razorpayPaise: 0,
+      razorpayPaise: totalPaise, // Source paid at counter
       walletDebitPaise: 0,
     },
     bookedAt: nowIso,
@@ -160,6 +162,36 @@ export async function POST(req: Request) {
             ErrorCodes.SEAT_UNAVAILABLE,
             `Seat ${sId} is already booked on this bus.`
           )
+        }
+      }
+
+      // 1b. Verify gender adjacency rules (Male and Female cannot be neighbours)
+      for (const p of passengers) {
+        const pGender = p.gender === 'female' || p.gender === 'F' ? 'F' : 'M'
+        const adjSeats = neighbours(p.seat)
+        for (const adj of adjSeats) {
+          // Check existing confirmed seats on the bus
+          const existingAdj = existingSeats[adj]
+          if (existingAdj && existingAdj.state === 'CONFIRMED' && existingAdj.gender) {
+            const adjGender = existingAdj.gender === 'F' ? 'F' : 'M'
+            if (adjGender !== pGender) {
+              throw new AppError(
+                ErrorCodes.INVALID_INPUT,
+                `Seat ${p.seat} (${pGender === 'F' ? 'Female' : 'Male'}) is adjacent to Seat ${adj} (${adjGender === 'F' ? 'Female' : 'Male'}). Male and female passengers cannot sit next to each other.`
+              )
+            }
+          }
+          // Check other passengers in this booking
+          const coPax = passengers.find((o) => o.seat === adj && o !== p)
+          if (coPax) {
+            const coGender = coPax.gender === 'female' || coPax.gender === 'F' ? 'F' : 'M'
+            if (coGender !== pGender) {
+              throw new AppError(
+                ErrorCodes.INVALID_INPUT,
+                `Seats ${p.seat} and ${adj} are adjacent, but assigned to different genders (${p.name || 'P1'} and ${coPax.name || 'P2'}). Male and female passengers cannot sit next to each other.`
+              )
+            }
+          }
         }
       }
 

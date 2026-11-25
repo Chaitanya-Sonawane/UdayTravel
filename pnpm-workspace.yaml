@@ -7,4 +7,4 @@ minimumReleaseAgeExclude:
 allowBuilds:
   '@firebase/util': true
   protobufjs: true
-  puppeteer: true
+  puppeteer: set this to true or false

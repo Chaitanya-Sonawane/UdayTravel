@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { TicketsRepository } from '@/lib/data/tickets.repo'
 import { AppError, ErrorCodes } from '@/lib/errors/app-error'

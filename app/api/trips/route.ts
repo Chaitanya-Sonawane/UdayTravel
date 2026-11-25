@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { TripsRepository } from '@/lib/data/trips.repo'
 import { requireAdmin } from '@/lib/server/admin-guard'

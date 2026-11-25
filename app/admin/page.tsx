@@ -3,57 +3,76 @@
 import React, { useState } from 'react'
 import { DailyRouteBusScheduler } from '@/components/admin/DailyRouteBusScheduler'
 import { ManualCounterBooking } from '@/components/admin/ManualCounterBooking'
+import { RouteWisePassengerSheet } from '@/components/admin/RouteWisePassengerSheet'
 import { PassengerManifestDispatch } from '@/components/admin/PassengerManifestDispatch'
 import { TicketLookupAndOverrides } from '@/components/admin/TicketLookupAndOverrides'
-import { AdminAuthorityOverview } from '@/components/admin/AdminAuthorityOverview'
+import { PaymentTransactionsLedger } from '@/components/admin/PaymentTransactionsLedger'
+import { TicketCancellationsLedger } from '@/components/admin/TicketCancellationsLedger'
 import {
   Calendar,
   Ticket,
+  Armchair,
   ClipboardList,
   Search,
-  ShieldCheck,
   ArrowRight,
-  Bus,
+  Route,
+  Receipt,
+  RotateCcw,
 } from 'lucide-react'
+import { RouteId } from '@/lib/config/routes'
+import { todayIST } from '@/lib/time/ist'
 
-type AdminTab = 'scheduler' | 'counter' | 'manifest' | 'lookup' | 'authority'
+type AdminTab = 'scheduler' | 'counter' | 'routesheet' | 'manifest' | 'lookup' | 'payments' | 'cancellations'
 
 export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('scheduler')
+  const [selectedTripForSeats, setSelectedTripForSeats] = useState<any>(null)
+  const [selectedDateForSeats, setSelectedDateForSeats] = useState<string>(todayIST())
+  const [selectedRouteForSeats, setSelectedRouteForSeats] = useState<RouteId>('AHM_PUN')
+
+  const handleSelectTripForSeats = (trip: any, date: string, route: RouteId) => {
+    setSelectedTripForSeats(trip)
+    setSelectedDateForSeats(date)
+    setSelectedRouteForSeats(route)
+    setActiveTab('counter')
+  }
 
   return (
     <main className="min-h-screen bg-[#F3F4F6] text-[#111827] selection:bg-[#F8B018] selection:text-white pb-20">
-      {/* Top Header matching Webapp theme */}
+      {/* Top Header */}
       <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur-md px-4 py-3.5 sm:px-8 shadow-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <a href="/" className="flex items-center gap-2.5 group">
-              <span className="h-10 w-10 bg-[#F8B018] text-gray-950 font-black flex items-center justify-center font-sans text-xl rounded-2xl shadow-xs">
+            <a href="/" className="flex items-center gap-2.5 group" title="Uday Travels Home">
+              <span
+                className="h-9 w-9 bg-[#F8B018] font-black flex items-center justify-center font-sans text-sm rounded-xl shadow-xs"
+                style={{ backgroundColor: '#F8B018', color: '#0B0F19', fontWeight: 900 }}
+              >
                 UT
               </span>
-              <div>
-                <span className="font-extrabold tracking-wider text-base text-gray-900 block leading-tight">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold tracking-wider text-base text-gray-900 leading-tight">
                   UDAY TRAVELS
                 </span>
-                <span className="text-[10px] text-[#92400E] bg-[#FEF3C7] px-2 py-0.5 rounded-full uppercase tracking-widest font-mono font-bold">
-                  Admin Dispatch &amp; Operations
+                <span className="text-[10px] text-[#92400E] bg-[#FEF3C7] px-2 py-0.5 rounded-full uppercase tracking-wider font-mono font-bold">
+                  Admin
                 </span>
               </div>
             </a>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-bold">
+            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800 font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Realtime Database Connected
+              Connected
             </div>
             <a
               href="/availability"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl transition-colors"
             >
-              <span>User Booking Portal</span>
+              <span>Booking Portal</span>
               <ArrowRight size={12} />
             </a>
           </div>
@@ -61,120 +80,152 @@ export default function AdminPage() {
       </header>
 
       {/* Main Container */}
-      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-8 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-5 sm:px-8 space-y-5">
         {/* Navigation Tabs Bar */}
-        <nav className="bg-white border border-gray-200 rounded-2xl p-1.5 sm:p-2 shadow-xs flex items-center overflow-x-auto gap-1.5 sm:gap-2">
+        <nav className="bg-white border border-gray-200 rounded-2xl p-1.5 shadow-xs flex items-center overflow-x-auto gap-1.5">
           <button
             type="button"
             onClick={() => setActiveTab('scheduler')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'scheduler'
                 ? 'bg-[#F8B018] text-gray-950 shadow-xs'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
             }`}
           >
-            <Calendar size={15} />
-            <span>Route &amp; Bus Scheduler</span>
+            <Calendar size={14} />
+            <span>Scheduler</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('counter')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 relative ${
               activeTab === 'counter'
                 ? 'bg-[#F8B018] text-gray-950 shadow-xs'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
             }`}
           >
-            <Ticket size={15} />
-            <span>Manual Counter Booking</span>
+            <Armchair size={14} className={activeTab === 'counter' ? 'text-gray-950' : 'text-[#F8B018]'} />
+            <span>Live Seat Map &amp; Counter</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('routesheet')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+              activeTab === 'routesheet'
+                ? 'bg-[#F8B018] text-gray-950 shadow-xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <Route size={14} />
+            <span>Route Passengers</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('manifest')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'manifest'
                 ? 'bg-[#F8B018] text-gray-950 shadow-xs'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
             }`}
           >
-            <ClipboardList size={15} />
-            <span>Boarding Manifest &amp; Dispatch</span>
+            <ClipboardList size={14} />
+            <span>Manifest &amp; Dispatch</span>
           </button>
 
           <button
             type="button"
             onClick={() => setActiveTab('lookup')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
               activeTab === 'lookup'
                 ? 'bg-[#F8B018] text-gray-950 shadow-xs'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
             }`}
           >
-            <Search size={15} />
-            <span>Ticket Lookup &amp; Overrides</span>
+            <Search size={14} />
+            <span>Ticket Lookup</span>
           </button>
 
           <button
             type="button"
-            onClick={() => setActiveTab('authority')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ml-auto ${
-              activeTab === 'authority'
-                ? 'bg-gray-900 text-white shadow-xs'
+            onClick={() => setActiveTab('payments')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+              activeTab === 'payments'
+                ? 'bg-[#F8B018] text-gray-950 shadow-xs'
                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
             }`}
           >
-            <ShieldCheck size={15} />
-            <span>Admin Authority &amp; Scope</span>
+            <Receipt size={14} />
+            <span>Booking Payments</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('cancellations')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 ${
+              activeTab === 'cancellations'
+                ? 'bg-[#F8B018] text-gray-950 shadow-xs'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <RotateCcw size={14} />
+            <span>Cancellations &amp; Refunds</span>
           </button>
         </nav>
 
         {/* Tab 1: Route & Bus Scheduler */}
         {activeTab === 'scheduler' && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
-              <div className="flex items-center gap-3">
-                <span className="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-950 text-xs font-black uppercase tracking-wider">
-                  Scheduler
-                </span>
-                <span className="text-sm font-extrabold text-gray-900">
-                  Daily Route &amp; Bus Schedule Creator (55 / 44 / 33 Seater Layout Selection)
-                </span>
-              </div>
-              <span className="text-xs text-gray-400 font-medium hidden sm:inline">
-                Live RTDB Sync
-              </span>
-            </div>
-            <DailyRouteBusScheduler />
+          <div className="animate-in fade-in duration-200">
+            <DailyRouteBusScheduler onSelectTripForSeats={handleSelectTripForSeats} />
           </div>
         )}
 
-        {/* Tab 2: Manual Counter Booking */}
+        {/* Tab 2: Manual Counter Booking & Live Seat Chart */}
         {activeTab === 'counter' && (
           <div className="animate-in fade-in duration-200">
-            <ManualCounterBooking />
+            <ManualCounterBooking
+              initialTrip={selectedTripForSeats}
+              initialDate={selectedDateForSeats}
+              initialRoute={selectedRouteForSeats}
+            />
           </div>
         )}
 
-        {/* Tab 3: Boarding Manifest & Dispatch */}
+        {/* Tab 3: Route-Wise Passenger Boarding Sheet */}
+        {activeTab === 'routesheet' && (
+          <div className="animate-in fade-in duration-200">
+            <RouteWisePassengerSheet />
+          </div>
+        )}
+
+        {/* Tab 4: Boarding Manifest & Dispatch */}
         {activeTab === 'manifest' && (
           <div className="animate-in fade-in duration-200">
             <PassengerManifestDispatch />
           </div>
         )}
 
-        {/* Tab 4: Ticket Lookup & Overrides */}
+        {/* Tab 5: Ticket Lookup & Overrides */}
         {activeTab === 'lookup' && (
           <div className="animate-in fade-in duration-200">
             <TicketLookupAndOverrides />
           </div>
         )}
 
-        {/* Tab 5: Admin Authority & Scope */}
-        {activeTab === 'authority' && (
+        {/* Tab 6: Booking Payments & Time Audit */}
+        {activeTab === 'payments' && (
           <div className="animate-in fade-in duration-200">
-            <AdminAuthorityOverview onNavigateTab={(tab) => setActiveTab(tab as AdminTab)} />
+            <PaymentTransactionsLedger />
+          </div>
+        )}
+
+        {/* Tab 7: Ticket Cancellations (Manual & Web App) */}
+        {activeTab === 'cancellations' && (
+          <div className="animate-in fade-in duration-200">
+            <TicketCancellationsLedger />
           </div>
         )}
       </div>

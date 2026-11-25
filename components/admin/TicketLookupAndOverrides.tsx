@@ -93,40 +93,30 @@ export function TicketLookupAndOverrides() {
   return (
     <div className="space-y-6">
       {/* Header Card */}
-      <section className="bg-white border border-gray-200 rounded-3xl p-5 md:p-6 shadow-xs space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-[#F8B018]/30 flex items-center justify-center text-amber-700 font-bold shrink-0">
-            <Search size={24} />
-          </div>
-          <div>
-            <h2 className="text-lg font-black text-gray-900 tracking-tight">
-              Ticket Lookup &amp; Emergency Administrative Overrides
-            </h2>
-            <p className="text-xs text-gray-500">
-              Search any ticket across the entire database by PNR, passenger phone, or name. Execute authorized emergency seat releases.
-            </p>
-          </div>
-        </div>
+      <section className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-3">
+        <h2 className="text-lg font-black text-gray-900 tracking-tight">
+          Ticket Lookup
+        </h2>
 
         {/* Search Input Bar */}
-        <form onSubmit={handleSearch} className="flex gap-3 pt-2">
+        <form onSubmit={handleSearch} className="flex gap-2">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Enter Ticket Number (e.g. UT-20261118-...), Passenger Mobile (e.g. 9822012345), or Name..."
-              className="w-full pl-11 pr-4 py-3 rounded-2xl border border-gray-300 bg-gray-50 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
+              placeholder="Search by Ticket No, Mobile, or Name..."
+              className="w-full pl-10 pr-3 py-2.5 rounded-xl border border-gray-300 bg-gray-50 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
             />
           </div>
           <button
             type="submit"
             disabled={searching || !searchQuery.trim()}
-            className="px-6 py-3 bg-[#F8B018] hover:bg-[#e09b0b] text-gray-950 font-black text-xs rounded-2xl transition-all shadow-xs flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2.5 bg-[#F8B018] hover:bg-[#e09b0b] text-gray-950 font-bold text-xs rounded-xl transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50"
           >
-            {searching ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
-            <span>Search Tickets</span>
+            {searching ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+            <span>Search</span>
           </button>
         </form>
       </section>

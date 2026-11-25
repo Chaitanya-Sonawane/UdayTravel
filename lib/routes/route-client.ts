@@ -136,10 +136,60 @@ export function invalidateRouteCache(routeId?: string): void {
 }
 
 /**
- * Formats pickup point display string: "Name — 6:30 AM"
+ * Adjusts raw pickup point time relative to the journey's actual departure time.
+ * E.g. If route seed base is 18:30 and point is 18:45 (+15m), and journey departs at 10:00,
+ * the adjusted pickup time is 10:15.
  */
-export function formatPickupDisplay(p: PickupPoint): string {
-  return `${p.name} — ${format12hTime(p.pickupTime)}`
+export function getAdjustedPickupTime(
+  rawPickupTime: string,
+  baseDepTime?: string,
+  routeBaseTime?: string
+): string {
+  if (!baseDepTime || !rawPickupTime) return rawPickupTime
+
+  try {
+    const parseMins = (tStr: string) => {
+      const trimmed = tStr.trim()
+      const m = trimmed.match(/^(\d{1,2}):(\d{2})/i)
+      if (!m || !m[1] || !m[2]) return null
+      let h = parseInt(m[1], 10)
+      const min = parseInt(m[2], 10)
+      if (/pm/i.test(trimmed) && h < 12) h += 12
+      if (/am/i.test(trimmed) && h === 12) h = 0
+      return h * 60 + min
+    }
+
+    const depMins = parseMins(baseDepTime)
+    const rawMins = parseMins(rawPickupTime)
+    if (depMins === null || rawMins === null) return rawPickupTime
+
+    const refBaseMins = routeBaseTime ? parseMins(routeBaseTime) : null
+    let offset = 0
+    if (refBaseMins !== null) {
+      offset = Math.max(0, rawMins - refBaseMins)
+    }
+
+    const adjustedTotal = (depMins + offset) % 1440
+    const adjH = Math.floor(adjustedTotal / 60)
+    const adjM = adjustedTotal % 60
+    return `${String(adjH).padStart(2, '0')}:${String(adjM).padStart(2, '0')}`
+  } catch {
+    return rawPickupTime
+  }
+}
+
+/**
+ * Formats pickup point display string: "Name — 6:30 AM" (or adjusted for journey departure time).
+ */
+export function formatPickupDisplay(
+  p: PickupPoint,
+  departureTime?: string,
+  routeBaseTime?: string
+): string {
+  const adjusted = departureTime
+    ? getAdjustedPickupTime(p.pickupTime, departureTime, routeBaseTime)
+    : p.pickupTime
+  return `${p.name} — ${format12hTime(adjusted)}`
 }
 
 /**

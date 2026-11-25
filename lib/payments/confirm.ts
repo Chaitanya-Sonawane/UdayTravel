@@ -99,7 +99,7 @@ export async function confirmBooking(
   }
 
   // 3. Execute authoritative Firestore confirmation transaction
-  const ticketNo = TicketsRepository.generateTicketNo()
+  const ticketNo = TicketsRepository.generateTicketNo(existingOrder.routeId)
   const nowIso = new Date().toISOString()
   const busNumber = 'MH 16 DP 4951'
   const qrToken = generateQrToken(ticketNo, existingOrder.travelDate, busNumber)

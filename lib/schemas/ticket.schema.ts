@@ -21,7 +21,7 @@ export const TicketPassengerSchema = z.object({
 export type TicketPassenger = z.infer<typeof TicketPassengerSchema>
 
 export const TicketDocSchema = z.object({
-  ticketNo: z.string().regex(/^UT[A-Z0-9]{5,10}$/),
+  ticketNo: z.string().regex(/^UT[-_A-Z0-9]{4,20}$/),
   grp: z.string(),
   uid: z.string(),
   status: TicketStatusSchema,
@@ -66,8 +66,13 @@ export const TicketDocSchema = z.object({
   bookedAt: z.string(),
   qrToken: z.string(),
   cancelledAt: z.string().optional(),
+  cancelledPassengers: z.array(TicketPassengerSchema).optional(),
   cancellationFeePaise: z.number().int().nonnegative().optional(),
   refundPaise: z.number().int().nonnegative().optional(),
+  cancellationSource: z
+    .enum(['WEBAPP_USER_SELF_SERVICE', 'MANUAL_ADMIN_OVERRIDE'])
+    .optional(),
+  cancellationReason: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   schemaVersion: z.number().int().default(1),

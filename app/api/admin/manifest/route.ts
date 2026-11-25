@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getAdminDb } from '@/lib/firebase/admin'
@@ -109,9 +110,10 @@ export async function GET(req: Request) {
 
 const UpdateBoardingSchema = z.object({
   tripId: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  travelDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   seatNo: z.string().min(1),
-  ticketNo: z.string().min(1),
+  ticketNo: z.string().optional(),
   boarded: z.boolean(),
 })
 
@@ -139,9 +141,10 @@ export async function PATCH(req: Request) {
     )
   }
 
-  const { tripId, date, seatNo, ticketNo, boarded } = parseResult.data
+  const { tripId, date, travelDate, seatNo, ticketNo, boarded } = parseResult.data
+  const resolvedDate = date || travelDate || new Date().toISOString().slice(0, 10)
   const db = getAdminDb()
-  const manifestDocId = `manifest_${tripId}_${date}`
+  const manifestDocId = `manifest_${tripId}_${resolvedDate}`
   const nowIso = new Date().toISOString()
 
   try {
@@ -151,11 +154,11 @@ export async function PATCH(req: Request) {
     await docRef.set(
       {
         tripId,
-        date,
+        date: resolvedDate,
         updatedAt: nowIso,
         [`boardedSeats.${seatNo}`]: {
           seatNo,
-          ticketNo,
+          ticketNo: ticketNo || '',
           boarded,
           boardedAt: boarded ? nowIso : null,
           updatedAt: nowIso,

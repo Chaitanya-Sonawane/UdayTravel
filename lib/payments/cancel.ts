@@ -19,6 +19,7 @@ export interface CancelBookingParams {
   callerUid: string
   isAnonymous?: boolean
   reason?: string
+  selectedSeats?: string[]
 }
 
 export interface CancelBookingResult {
@@ -85,24 +86,56 @@ export async function cancelBooking(
     )
   }
 
+  // Determine which seats are being cancelled (partial vs full)
+  const allPassengerSeats = ticket.passengers.map((p) => p.seat)
+  const isPartial =
+    Array.isArray(params.selectedSeats) &&
+    params.selectedSeats.length > 0 &&
+    params.selectedSeats.length < allPassengerSeats.length
+
+  const seatsToCancel = isPartial
+    ? params.selectedSeats!.filter((s) => allPassengerSeats.includes(s))
+    : allPassengerSeats
+
+  if (seatsToCancel.length === 0) {
+    throw new AppError(ErrorCodes.INVALID_INPUT, 'No valid seats selected for cancellation')
+  }
+
+  const fraction = seatsToCancel.length / allPassengerSeats.length
+  const proratedTotalPaidPaise = Math.round(ticket.fare.totalPaise * fraction)
+
   // Compute refund
+  const isCounterBooking =
+    ticket.uid === 'admin_manual_booking' ||
+    ticket.payment?.method?.toLowerCase().includes('counter') ||
+    ticket.payment?.method?.toLowerCase().includes('cash')
+
   let refundBreakdown: RefundBreakdown
-  if (ticket.payment.walletDebitPaise === 0 && ticket.payment.razorpayPaise > 0) {
-    const split = compute2575Refund(ticket.fare.totalPaise)
+  if (isCounterBooking) {
     refundBreakdown = {
-      totalPaidPaise: ticket.fare.totalPaise,
+      totalPaidPaise: proratedTotalPaidPaise,
       feePaise: 0,
-      netRefundPaise: ticket.fare.totalPaise,
+      netRefundPaise: proratedTotalPaidPaise,
+      sourceRefundPaise: proratedTotalPaidPaise,
+      walletRefundPaise: 0,
+      seatCount: seatsToCancel.length,
+    }
+  } else if (ticket.payment.walletDebitPaise === 0 && ticket.payment.razorpayPaise > 0) {
+    const split = compute2575Refund(proratedTotalPaidPaise)
+    refundBreakdown = {
+      totalPaidPaise: proratedTotalPaidPaise,
+      feePaise: 0,
+      netRefundPaise: proratedTotalPaidPaise,
       sourceRefundPaise: split.sourceRefundPaise,
       walletRefundPaise: split.walletCreditPaise,
-      seatCount: ticket.fare.seats,
+      seatCount: seatsToCancel.length,
     }
   } else {
     refundBreakdown = computeRefund({
-      totalPaidPaise: ticket.fare.totalPaise,
-      seatCount: ticket.fare.seats,
-      sourcePaidPaise: ticket.payment.razorpayPaise,
-      walletPaidPaise: ticket.payment.walletDebitPaise,
+      totalPaidPaise: proratedTotalPaidPaise,
+      seatCount: seatsToCancel.length,
+      sourcePaidPaise: Math.round(ticket.payment.razorpayPaise * fraction),
+      walletPaidPaise: Math.round(ticket.payment.walletDebitPaise * fraction),
     })
   }
 
@@ -116,9 +149,8 @@ export async function cancelBooking(
       throw new AppError(ErrorCodes.CONFLICT, 'Ticket status changed concurrently')
     }
 
-    // 1. Release seats in bus_seats
-    const seatIds = txTicket.passengers.map((p) => p.seat)
-    SeatsRepository.releaseSeatsInTx(t, txTicket.tripId, txTicket.travelDate, seatIds)
+    // 1. Release selected seats in bus_seats
+    SeatsRepository.releaseSeatsInTx(t, txTicket.tripId, txTicket.travelDate, seatsToCancel)
 
     // 2. Decrement booked count in availability
     await AvailabilityRepository.adjustBookedInTx(
@@ -126,7 +158,7 @@ export async function cancelBooking(
       txTicket.route.routeId,
       txTicket.travelDate,
       txTicket.tripId,
-      -txTicket.fare.seats
+      -seatsToCancel.length
     )
 
     // 3. Credit store credit wallet if wallet was used or allocated
@@ -138,7 +170,7 @@ export async function cancelBooking(
         refundBreakdown.walletRefundPaise,
         'REFUND',
         ticketNo,
-        `Refund for cancelled ticket ${ticketNo}`,
+        `Refund for cancelled seat(s) ${seatsToCancel.join(', ')} on ticket ${ticketNo}`,
         walletDoc
       )
     }
@@ -162,34 +194,57 @@ export async function cancelBooking(
       RefundsRepository.createRefundInTx(t, createdRefundDoc)
     }
 
-    // 5. Update Ticket status to CANCELLED
-    TicketsRepository.updateTicketInTx(t, ticketNo, {
-      status: 'CANCELLED',
-      cancellationFeePaise: refundBreakdown.feePaise,
-      refundPaise: refundBreakdown.netRefundPaise,
-      cancelledAt: nowIso,
-    })
-  })
+    // 5. Update Ticket status (CANCELLED if all seats cancelled, remaining CONFIRMED if partial)
+    if (!isPartial) {
+      TicketsRepository.updateTicketInTx(t, ticketNo, {
+        status: 'CANCELLED',
+        cancellationFeePaise: refundBreakdown.feePaise,
+        refundPaise: refundBreakdown.netRefundPaise,
+        cancellationSource: callerUid === 'admin' ? 'MANUAL_ADMIN_OVERRIDE' : 'WEBAPP_USER_SELF_SERVICE',
+        cancellationReason: reason || (callerUid === 'admin' ? 'Administrative / Counter override' : 'Cancelled by user via Web App'),
+        cancelledAt: nowIso,
+      })
+    } else {
+      const remainingPassengers = txTicket.passengers.filter((p) => !seatsToCancel.includes(p.seat))
+      const cancelledPassengers = txTicket.passengers.filter((p) => seatsToCancel.includes(p.seat))
+      const remainingTotalPaise = txTicket.fare.totalPaise - proratedTotalPaidPaise
 
-  const seatIds = ticket.passengers.map((p) => p.seat)
+      TicketsRepository.updateTicketInTx(t, ticketNo, {
+        passengers: remainingPassengers,
+        fare: {
+          ...txTicket.fare,
+          seats: remainingPassengers.length,
+          totalPaise: remainingTotalPaise,
+        },
+        cancellationFeePaise: (txTicket.cancellationFeePaise || 0) + refundBreakdown.feePaise,
+        refundPaise: (txTicket.refundPaise || 0) + refundBreakdown.netRefundPaise,
+        cancellationSource: callerUid === 'admin' ? 'MANUAL_ADMIN_OVERRIDE' : 'WEBAPP_USER_SELF_SERVICE',
+        cancellationReason: reason || (callerUid === 'admin' ? 'Administrative / Counter override' : 'Cancelled by user via Web App'),
+        cancelledPassengers: [...((txTicket as any).cancelledPassengers || []), ...cancelledPassengers],
+        updatedAt: nowIso,
+      })
+    }
+  })
 
   // Update Bookings collection
   try {
-    await BookingsRepository.updateBookingStatus(ticket.grp, 'cancelled')
+    if (!isPartial) {
+      await BookingsRepository.updateBookingStatus(ticket.grp, 'cancelled')
+    }
   } catch (bErr) {
     console.warn('[cancelBooking] Booking update warning:', bErr)
   }
 
   // Update Trips collection
   try {
-    await TripsRepository.recordCancellationInTrip(ticket.tripId, ticket.fare.seats, seatIds)
+    await TripsRepository.recordCancellationInTrip(ticket.tripId, seatsToCancel.length, seatsToCancel)
   } catch (tErr) {
     console.warn('[cancelBooking] Trip record warning:', tErr)
   }
 
   // Update Firebase Realtime Database live seat states
   try {
-    await cancelSeatsInRtdb({ tripId: ticket.tripId, seatIds })
+    await cancelSeatsInRtdb({ tripId: ticket.tripId, seatIds: seatsToCancel })
   } catch (rErr) {
     console.warn('[cancelBooking] RTDB release warning:', rErr)
   }

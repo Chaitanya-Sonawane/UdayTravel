@@ -19,10 +19,13 @@ import {
   CheckSquare,
   Square,
   ShieldCheck,
+  FileDown,
+  FileText,
 } from 'lucide-react'
 import { RouteId, ROUTES } from '@/lib/config/routes'
 import { todayIST } from '@/lib/time/ist'
 import { ManifestPassenger } from '@/app/api/admin/manifest/route'
+import { AHILYANAGAR_PICKUP_RAW, PUNE_PICKUP_RAW } from '@/lib/routes/seed-data'
 
 interface ScheduledTripSummary {
   tripId: string
@@ -57,6 +60,7 @@ export function PassengerManifestDispatch() {
 
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'BOARDED' | 'PENDING'>('ALL')
+  const [sortBy, setSortBy] = useState<'seat' | 'route'>('route')
   const [togglingSeat, setTogglingSeat] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
 
@@ -69,10 +73,11 @@ export function PassengerManifestDispatch() {
       try {
         const res = await fetch(`/api/admin/schedule?route=${routeId}&date=${travelDate}`)
         const data = await res.json()
-        if (active && data.scheduledTrips && Array.isArray(data.scheduledTrips)) {
-          setTrips(data.scheduledTrips)
-          if (data.scheduledTrips.length > 0) {
-            setSelectedTripId(data.scheduledTrips[0].tripId)
+        const list = (data.scheduledTrips || data.trips || []) as ScheduledTripSummary[]
+        if (active && Array.isArray(list)) {
+          setTrips(list)
+          if (list.length > 0 && list[0]) {
+            setSelectedTripId(list[0].tripId)
           } else {
             setSelectedTripId('')
             setManifestData(null)
@@ -91,10 +96,12 @@ export function PassengerManifestDispatch() {
   }, [routeId, travelDate])
 
   // 2. Fetch manifest when tripId or date changes
-  const fetchManifest = async () => {
+  const fetchManifest = async (isBackground = false) => {
     if (!selectedTripId) return
-    setLoadingManifest(true)
-    setErrorMsg('')
+    if (!isBackground) {
+      setLoadingManifest(true)
+      setErrorMsg('')
+    }
     try {
       const res = await fetch(`/api/admin/manifest?tripId=${selectedTripId}&date=${travelDate}`)
       const data = await res.json()
@@ -109,18 +116,26 @@ export function PassengerManifestDispatch() {
           boardingPercentage: data.boardingPercentage,
           passengers: data.passengers,
         })
-      } else {
+      } else if (!isBackground) {
         throw new Error(data.error?.message || 'Failed to load manifest')
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error loading manifest data.')
+      if (!isBackground) {
+        setErrorMsg(err.message || 'Error loading manifest data.')
+      }
     } finally {
-      setLoadingManifest(false)
+      if (!isBackground) {
+        setLoadingManifest(false)
+      }
     }
   }
 
   useEffect(() => {
     fetchManifest()
+    const interval = setInterval(() => {
+      fetchManifest(true)
+    }, 4000)
+    return () => clearInterval(interval)
   }, [selectedTripId, travelDate])
 
   // 3. Toggle passenger boarding status
@@ -168,23 +183,46 @@ export function PassengerManifestDispatch() {
     }
   }
 
-  // Filter passengers
-  const filteredPassengers = (manifestData?.passengers || []).filter((p) => {
-    // Status filter
-    if (filterStatus === 'BOARDED' && !p.boarded) return false
-    if (filterStatus === 'PENDING' && p.boarded) return false
+  // Filter and sort passengers
+  const isAhmPun = routeId === 'AHM_PUN'
+  const pickupList = isAhmPun ? AHILYANAGAR_PICKUP_RAW : PUNE_PICKUP_RAW
 
-    // Search query
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase().trim()
-    return (
-      p.seatNo.toLowerCase().includes(q) ||
-      p.name.toLowerCase().includes(q) ||
-      p.mobile.includes(q) ||
-      p.ticketNo.toLowerCase().includes(q) ||
-      p.pickupStop.toLowerCase().includes(q)
+  const getStopIdx = (stopName: string) => {
+    const clean = (stopName || '').toLowerCase()
+    const idx = pickupList.findIndex(
+      (p) => clean.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(clean)
     )
-  })
+    return idx >= 0 ? idx : 999
+  }
+
+  const filteredPassengers = (manifestData?.passengers || [])
+    .filter((p) => {
+      // Status filter
+      if (filterStatus === 'BOARDED' && !p.boarded) return false
+      if (filterStatus === 'PENDING' && p.boarded) return false
+
+      // Search query
+      if (!searchQuery.trim()) return true
+      const q = searchQuery.toLowerCase().trim()
+      return (
+        p.seatNo.toLowerCase().includes(q) ||
+        p.name.toLowerCase().includes(q) ||
+        p.mobile.includes(q) ||
+        p.ticketNo.toLowerCase().includes(q) ||
+        p.pickupStop.toLowerCase().includes(q)
+      )
+    })
+    .sort((a, b) => {
+      if (sortBy === 'route') {
+        const seqA = getStopIdx(a.pickupStop)
+        const seqB = getStopIdx(b.pickupStop)
+        if (seqA !== seqB) return seqA - seqB
+        if (a.pickupTime !== b.pickupTime) {
+          return (a.pickupTime || '').localeCompare(b.pickupTime || '')
+        }
+      }
+      return a.seatNo.localeCompare(b.seatNo, undefined, { numeric: true })
+    })
 
   const currentTrip = trips.find((t) => t.tripId === selectedTripId)
 
@@ -192,40 +230,34 @@ export function PassengerManifestDispatch() {
     <div className="space-y-6">
       {/* Top Filter & Trip Selector Card */}
       <section className="bg-white border border-gray-200 rounded-3xl p-5 md:p-6 shadow-xs space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-[#F8B018]/30 flex items-center justify-center text-amber-700 font-bold shrink-0">
-              <ClipboardList size={24} />
-            </div>
-            <div>
-              <h2 className="text-lg font-black text-gray-900 tracking-tight">
-                Passenger Manifest &amp; Live Boarding Dispatch
-              </h2>
-              <p className="text-xs text-gray-500">
-                Real-time passenger checklist, contact dialer, and bus departure dispatch console
-              </p>
-            </div>
-          </div>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4">
+          <h2 className="text-lg font-black text-gray-900 tracking-tight">
+            Passenger Manifest &amp; Dispatch
+          </h2>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={fetchManifest}
+              onClick={() => fetchManifest()}
               disabled={loadingManifest || !selectedTripId}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50"
             >
               <RefreshCw size={13} className={loadingManifest ? 'animate-spin' : ''} />
-              <span>Refresh Manifest</span>
+              <span>Refresh</span>
             </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              disabled={!manifestData || manifestData.passengers.length === 0}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-gray-900 bg-[#F8B018] hover:bg-[#e09b0b] rounded-xl transition-colors shadow-xs disabled:opacity-50"
+            <a
+              href={selectedTripId ? `/api/admin/manifest/pdf?tripId=${selectedTripId}&date=${travelDate}` : '#'}
+              target="_blank"
+              rel="noreferrer"
+              className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all shadow-xs ${
+                selectedTripId
+                  ? 'bg-[#F8B018] hover:bg-[#e09b0b] text-gray-950 cursor-pointer'
+                  : 'bg-gray-200 text-gray-400 pointer-events-none'
+              }`}
             >
-              <Printer size={13} />
-              <span>Print Conductor Manifest</span>
-            </button>
+              <FileDown size={14} />
+              <span>Export PDF</span>
+            </a>
           </div>
         </div>
 
@@ -249,9 +281,39 @@ export function PassengerManifestDispatch() {
           </div>
 
           <div>
-            <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1.5">
-              Travel Date
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500">
+                Travel Date
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setTravelDate(todayIST())}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                    travelDate === todayIST()
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const d = new Date()
+                    d.setDate(d.getDate() + 1)
+                    setTravelDate(d.toISOString().slice(0, 10))
+                  }}
+                  className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                    travelDate !== todayIST()
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  Tomorrow
+                </button>
+              </div>
+            </div>
             <input
               type="date"
               value={travelDate}
@@ -363,40 +425,70 @@ export function PassengerManifestDispatch() {
               />
             </div>
 
-            <div className="flex items-center gap-1.5 self-end sm:self-auto">
-              <button
-                type="button"
-                onClick={() => setFilterStatus('ALL')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-                  filterStatus === 'ALL'
-                    ? 'bg-gray-900 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                }`}
-              >
-                All ({manifestData.passengers.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterStatus('PENDING')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-                  filterStatus === 'PENDING'
-                    ? 'bg-amber-500 text-gray-950'
-                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                }`}
-              >
-                Pending ({manifestData.pendingBoarding})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFilterStatus('BOARDED')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
-                  filterStatus === 'BOARDED'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                }`}
-              >
-                Boarded ({manifestData.boardedCount})
-              </button>
+            <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+              {/* Sort Order Selector */}
+              <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setSortBy('route')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                    sortBy === 'route'
+                      ? 'bg-amber-100 text-amber-950 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Sort by Chronological Route Pickup Order"
+                >
+                  Route Order
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSortBy('seat')}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition-all ${
+                    sortBy === 'seat'
+                      ? 'bg-amber-100 text-amber-950 shadow-xs'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                  title="Sort by Bus Seat Number"
+                >
+                  Seat Order
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setFilterStatus('ALL')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                    filterStatus === 'ALL'
+                      ? 'bg-gray-900 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  All ({manifestData.passengers.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterStatus('PENDING')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                    filterStatus === 'PENDING'
+                      ? 'bg-amber-500 text-gray-950'
+                      : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  Pending ({manifestData.pendingBoarding})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterStatus('BOARDED')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
+                    filterStatus === 'BOARDED'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                  }`}
+                >
+                  Boarded ({manifestData.boardedCount})
+                </button>
+              </div>
             </div>
           </div>
 

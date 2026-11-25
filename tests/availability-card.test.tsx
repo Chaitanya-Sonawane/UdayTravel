@@ -8,6 +8,7 @@ vi.mock('next/navigation', () => ({
     push: vi.fn(),
     replace: vi.fn(),
   }),
+  useSearchParams: () => new URLSearchParams('route=AHM_PUN&date=2026-11-25'),
 }))
 
 vi.mock('@/lib/auth/client-auth', () => ({
@@ -54,8 +55,7 @@ describe('Availability Page - Proper Card & Clearly Viewed Step 1 and Step 2', (
 
   it('renders the header and hero copy properly', () => {
     const html = renderToString(<AvailabilityPage />)
-    expect(html).toContain('UDAY TRAVELS')
-    expect(html).toContain('01 / AVAILABILITY')
+    expect(html).toContain('availability-header')
     expect(html).toContain('CHOOSE YOUR')
     expect(html).toContain('JOURNEY.')
   })

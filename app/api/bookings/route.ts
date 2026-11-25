@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/server/guard'
 import { TicketsRepository } from '@/lib/data/tickets.repo'

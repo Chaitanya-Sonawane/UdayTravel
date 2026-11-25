@@ -1,4 +1,7 @@
+'use client'
+
 import React from 'react'
+import { User } from 'lucide-react'
 
 export type Passenger = {
   name: string
@@ -13,34 +16,55 @@ export type PassengerListProps = {
 
 export function PassengerList({ passengers }: PassengerListProps) {
   return (
-    <section className="p-4 border-t border-gray-100">
-      <h3 className="font-semibold text-base text-[#111] mb-3">Passengers</h3>
+    <section className="py-4 sm:py-5 font-jakarta">
+      {/* Section Header */}
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-bold text-xs tracking-wider uppercase text-slate-400">
+          PASSENGERS &amp; SEATS
+        </h3>
+        <span className="text-xs font-semibold text-slate-500">
+          {passengers.length} {passengers.length === 1 ? 'Traveller' : 'Travellers'}
+        </span>
+      </div>
 
-      <div className="space-y-3">
-        {passengers.map((p, idx) => (
-          <div
-            key={`${p.name}-${p.seatNo}-${idx}`}
-            className="flex items-center justify-between gap-2"
-          >
-            {/* Left: Name and {GENDER} {age} years */}
-            <div className="min-w-0">
-              <p className="font-medium text-sm text-[#111] leading-tight truncate">
-                {p.name}
-              </p>
-              <p className="text-xs text-[#6b7280] mt-0.5">
-                {p.gender} {p.age} years
-              </p>
-            </div>
+      <div className="space-y-2">
+        {passengers.map((p, idx) => {
+          const genderText = p.gender === 'FEMALE' ? 'Female' : 'Male'
+          const seatDisplay = p.seatNo.toLowerCase().startsWith('seat')
+            ? p.seatNo
+            : `Seat ${p.seatNo}`
+          return (
+            <div
+              key={`${p.name}-${p.seatNo}-${idx}`}
+              className="flex items-center justify-between gap-3 py-2 px-1 rounded-xl transition-all"
+            >
+              {/* Left: Avatar with User Icon + Name and Info */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-full bg-amber-50/90 border border-amber-200/70 flex items-center justify-center text-[#F8B018] shrink-0">
+                  <User size={18} strokeWidth={2.2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-sm sm:text-base text-slate-900 leading-tight truncate">
+                    {p.name}
+                  </p>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    {genderText} • {p.age} yrs
+                  </p>
+                </div>
+              </div>
 
-            {/* Right: Small muted-bold "Seat No. {seat}" with warm amber badge */}
-            <div className="text-right flex-shrink-0">
-              <span className="text-xs font-bold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/60">
-                Seat No. {p.seatNo}
-              </span>
+              {/* Right: Signature Yellow Pill Badge */}
+              <div className="text-right flex-shrink-0">
+                <span className="inline-flex items-center px-3 py-1 rounded-full bg-amber-50/80 text-amber-900 border border-amber-300 text-xs font-bold shadow-2xs">
+                  {seatDisplay}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </section>
   )
 }
+
+export default PassengerList

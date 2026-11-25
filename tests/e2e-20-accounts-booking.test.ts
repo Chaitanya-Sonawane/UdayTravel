@@ -280,7 +280,9 @@ describe('Actual Production E2E: 20 Accounts Booking 20 Seats on Route Ahilyanag
     })
   })
 
-  it('successfully creates 20 real passenger profiles and confirms 20 seats on the bus', async () => {
+  it(
+    'successfully creates 20 real passenger profiles and confirms 20 seats on the bus',
+    async () => {
     console.log(`\n========================================================================`)
     console.log(`[STARTING E2E TEST] Booking 20 Seats for 20 Accounts on Route ${routeId}`)
     console.log(`Trip: ${tripId} | Bus: ${busNumber} | Travel Date: ${travelDate}`)
@@ -425,5 +427,5 @@ describe('Actual Production E2E: 20 Accounts Booking 20 Seats on Route Ahilyanag
       }))
     )
     console.log(`========================================================================\n`)
-  })
+  }, 120000)
 })

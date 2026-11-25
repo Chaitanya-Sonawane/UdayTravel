@@ -49,8 +49,7 @@ export function subscribeToTripSeats(
       callback(data as Record<string, RtdbSeatState>)
     })
     return () => unsub()
-  } catch (err) {
-    console.warn('[subscribeToTripSeats] Real-time subscription error:', err)
+  } catch {
     return () => {}
   }
 }

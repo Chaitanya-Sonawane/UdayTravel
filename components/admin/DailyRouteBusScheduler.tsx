@@ -20,6 +20,10 @@ import {
   Sparkles,
   ArrowRight,
   UserCheck,
+  FileDown,
+  FileText,
+  CalendarDays,
+  ChevronDown,
 } from 'lucide-react'
 import { RouteId, ROUTES } from '@/lib/config/routes'
 import { todayIST, weekdayLabel } from '@/lib/time/ist'
@@ -30,6 +34,7 @@ import {
   getBusTemplate,
 } from '@/lib/domain/seats/bus-templates'
 import { DEFAULT_BUSES, BusDocument } from '@/lib/data/buses.constants'
+import { ThemedDatePickerModal } from '@/components/ui/ThemedDatePickerModal'
 
 type SeatState = 'available' | 'blocked' | 'female' | 'male'
 
@@ -37,6 +42,17 @@ function getNextDate(dateStr: string, daysAhead = 1): string {
   const d = new Date(`${dateStr}T12:00:00+05:30`)
   d.setDate(d.getDate() + daysAhead)
   return d.toISOString().slice(0, 10)
+}
+
+function formatDate(value: string): string {
+  try {
+    return new Date(`${value}T12:00:00+05:30`).toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+    })
+  } catch {
+    return value
+  }
 }
 
 function calculateArrival(departureTime: string, durationMinutes = 195): string {
@@ -50,7 +66,11 @@ function calculateArrival(departureTime: string, durationMinutes = 195): string 
   return `${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`
 }
 
-export function DailyRouteBusScheduler() {
+export function DailyRouteBusScheduler({
+  onSelectTripForSeats,
+}: {
+  onSelectTripForSeats?: (trip: any, date: string, route: RouteId) => void
+} = {}) {
   const today = useMemo(() => todayIST(), [])
   const tomorrow = useMemo(() => getNextDate(today, 1), [today])
   const maxDate = useMemo(() => getNextDate(today, 30), [today])
@@ -58,6 +78,7 @@ export function DailyRouteBusScheduler() {
   // Step 1: Route & Date State
   const [selectedRoute, setSelectedRoute] = useState<RouteId>('AHM_PUN')
   const [selectedDate, setSelectedDate] = useState<string>(today)
+  const [calendarOpen, setCalendarOpen] = useState(false)
 
   // Step 2: Bus Selection State
   const [selectedBusId, setSelectedBusId] = useState<string>('bus_mh16dp4951')
@@ -106,10 +127,10 @@ export function DailyRouteBusScheduler() {
       const res = await fetch(`/api/admin/schedule?route=${selectedRoute}&date=${selectedDate}`)
       if (res.ok) {
         const data = await res.json()
-        setScheduledTrips(data.trips || [])
+        setScheduledTrips(data.scheduledTrips || data.trips || [])
       }
-    } catch (err) {
-      console.warn('Failed to load trips:', err)
+    } catch {
+      // Safe catch for schedule load
     } finally {
       setLoadingSchedule(false)
     }
@@ -117,6 +138,10 @@ export function DailyRouteBusScheduler() {
 
   useEffect(() => {
     fetchDailyTrips()
+    const pollTimer = setInterval(() => {
+      fetchDailyTrips()
+    }, 4000)
+    return () => clearInterval(pollTimer)
   }, [fetchDailyTrips])
 
   // Auto-update arrival time when departure time changes
@@ -265,27 +290,19 @@ export function DailyRouteBusScheduler() {
       )}
 
       {/* Main Creation Card */}
-      <form onSubmit={handleCreateRouteSchedule} className="bg-white rounded-3xl border border-gray-200 p-6 md:p-8 space-y-8 shadow-xs">
+      <form onSubmit={handleCreateRouteSchedule} className="bg-white rounded-3xl border border-gray-200 p-6 md:p-8 space-y-6 shadow-xs">
         {/* Title Header */}
-        <div className="border-b border-gray-100 pb-5">
-          <div className="flex items-center gap-2">
-            <span className="h-8 w-8 rounded-xl bg-[#F8B018] text-white flex items-center justify-center font-black text-sm">
-              1
-            </span>
-            <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">
-              Create Route for the Day with Bus & Seat Pattern Selection
-            </h2>
-          </div>
-          <p className="text-xs text-gray-500 mt-1 pl-10">
-            Define daily route departures, assign official fleet coaches (55/44/33 seater), customize seating patterns, and publish live to passengers.
-          </p>
+        <div className="border-b border-gray-100 pb-4">
+          <h2 className="text-lg font-black text-gray-900 tracking-tight">
+            Schedule Route &amp; Bus
+          </h2>
         </div>
 
         {/* STEP 1A: SELECT ROUTE DIRECTION & OPERATIONAL DATE */}
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-500">
             <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">A</span>
-            <span>Select Route Direction & Date</span>
+            <span>Route &amp; Date</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -302,13 +319,9 @@ export function DailyRouteBusScheduler() {
                       : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'
                   }`}
                 >
-                  <span className="text-[10px] text-[#92400E] font-extrabold uppercase tracking-wider block">
-                    Origin → Destination
-                  </span>
-                  <strong className="text-sm font-extrabold text-gray-900 block mt-0.5">
+                  <strong className="text-sm font-extrabold text-gray-900 block">
                     Ahilyanagar → Pune
                   </strong>
-                  <span className="text-[11px] text-gray-500 block mt-0.5">Via Supa & Shirur</span>
                 </button>
 
                 <button
@@ -320,77 +333,132 @@ export function DailyRouteBusScheduler() {
                       : 'border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-700'
                   }`}
                 >
-                  <span className="text-[10px] text-[#92400E] font-extrabold uppercase tracking-wider block">
-                    Origin → Destination
-                  </span>
-                  <strong className="text-sm font-extrabold text-gray-900 block mt-0.5">
+                  <strong className="text-sm font-extrabold text-gray-900 block">
                     Pune → Ahilyanagar
                   </strong>
-                  <span className="text-[11px] text-gray-500 block mt-0.5">Via Wakadewadi & Wagholi</span>
                 </button>
               </div>
             </div>
 
-            {/* Travel Date */}
+            {/* Schedule Date — Webapp White & Yellow Theme */}
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-700 block">Operational Schedule Date</label>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-gray-700 block">Schedule Date</label>
+                <span className="text-[11px] font-bold text-amber-900 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                  Active: {formatDate(selectedDate)}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-w-xl" role="group" aria-label="Choose date">
+                {/* 1. Today */}
                 <button
                   type="button"
                   onClick={() => setSelectedDate(today)}
-                  className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition-all ${
+                  className={`flex flex-col items-center justify-center py-2.5 px-3 min-h-[54px] rounded-2xl border transition-all cursor-pointer ${
                     selectedDate === today
-                      ? 'border-[#F8B018] bg-[#F8B018] text-white shadow-xs'
-                      : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      ? 'border-[#F8B018] bg-gradient-to-r from-amber-500 to-[#F8B018] text-white shadow-md shadow-amber-500/20 ring-2 ring-[#F8B018]/30'
+                      : 'border-gray-200 bg-white text-gray-800 hover:border-[#F8B018] hover:bg-amber-50/30 shadow-2xs'
                   }`}
                 >
-                  Today ({today.slice(5)})
+                  <strong className="text-xs font-black leading-tight">Today</strong>
+                  <small className={`text-[11px] font-semibold ${selectedDate === today ? 'text-white/95' : 'text-gray-500'}`}>
+                    {formatDate(today)}
+                  </small>
                 </button>
 
+                {/* 2. Tomorrow */}
                 <button
                   type="button"
                   onClick={() => setSelectedDate(tomorrow)}
-                  className={`px-4 py-2.5 text-xs font-bold rounded-xl border transition-all ${
+                  className={`flex flex-col items-center justify-center py-2.5 px-3 min-h-[54px] rounded-2xl border transition-all cursor-pointer ${
                     selectedDate === tomorrow
-                      ? 'border-[#F8B018] bg-[#F8B018] text-white shadow-xs'
-                      : 'border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      ? 'border-[#F8B018] bg-gradient-to-r from-amber-500 to-[#F8B018] text-white shadow-md shadow-amber-500/20 ring-2 ring-[#F8B018]/30'
+                      : 'border-gray-200 bg-white text-gray-800 hover:border-[#F8B018] hover:bg-amber-50/30 shadow-2xs'
                   }`}
                 >
-                  Tomorrow ({tomorrow.slice(5)})
+                  <strong className="text-xs font-black leading-tight">Tomorrow</strong>
+                  <small className={`text-[11px] font-semibold ${selectedDate === tomorrow ? 'text-white/95' : 'text-gray-500'}`}>
+                    {formatDate(tomorrow)}
+                  </small>
                 </button>
 
-                <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-                  <Calendar size={15} className="text-[#F8B018]" />
-                  <input
-                    type="date"
-                    min={today}
-                    max={maxDate}
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="bg-transparent text-gray-900 text-xs font-bold outline-none cursor-pointer"
+                {/* 3. Choose date — Signature Webapp White & Yellow Button */}
+                <button
+                  type="button"
+                  onClick={() => setCalendarOpen(true)}
+                  className={`relative flex items-center justify-center gap-2 py-2.5 px-3 min-h-[54px] rounded-2xl border transition-all cursor-pointer select-none ${
+                    selectedDate !== today && selectedDate !== tomorrow
+                      ? 'border-[#F8B018] bg-gradient-to-r from-amber-500 to-[#F8B018] text-white shadow-md shadow-amber-500/20 ring-2 ring-[#F8B018]/30'
+                      : 'border-gray-200 bg-white text-gray-800 hover:border-[#F8B018] hover:bg-amber-50/30 shadow-2xs'
+                  }`}
+                  aria-label="Choose date"
+                  title="Choose date from calendar"
+                >
+                  <CalendarDays
+                    size={16}
+                    className={`shrink-0 transition-colors ${
+                      selectedDate !== today && selectedDate !== tomorrow ? 'text-white' : 'text-[#F8B018]'
+                    }`}
                   />
-                </div>
+                  <div className="flex flex-col items-center text-center leading-tight">
+                    <strong className="text-xs font-black">
+                      {selectedDate !== today && selectedDate !== tomorrow ? 'Custom' : 'Choose date'}
+                    </strong>
+                    <small
+                      className={`text-[11px] font-semibold ${
+                        selectedDate !== today && selectedDate !== tomorrow ? 'text-white/95' : 'text-gray-500'
+                      }`}
+                    >
+                      {selectedDate !== today && selectedDate !== tomorrow
+                        ? formatDate(selectedDate)
+                        : 'Calendar'}
+                    </small>
+                  </div>
+                  <ChevronDown
+                    size={13}
+                    className={`shrink-0 transition-colors ${
+                      selectedDate !== today && selectedDate !== tomorrow ? 'text-white/85' : 'text-gray-400'
+                    }`}
+                  />
+                </button>
+                <input
+                  type="date"
+                  min={today}
+                  max={maxDate}
+                  value={selectedDate}
+                  onChange={(e) => {
+                    if (e.target.value) setSelectedDate(e.target.value)
+                  }}
+                  className="sr-only"
+                  aria-label="Choose date"
+                  tabIndex={-1}
+                />
+
+                <ThemedDatePickerModal
+                  isOpen={calendarOpen}
+                  onClose={() => setCalendarOpen(false)}
+                  selectedDate={selectedDate}
+                  onSelectDate={(newDate) => {
+                    setSelectedDate(newDate)
+                    setCalendarOpen(false)
+                  }}
+                  minDate={today}
+                  maxDate={maxDate}
+                  title="Schedule Departure Date"
+                  routeContext={ROUTES[selectedRoute]?.name || 'Uday Travels'}
+                />
               </div>
-              <p className="text-[11px] text-gray-500 font-medium">
-                Active date: <strong className="text-gray-800">{weekdayLabel(selectedDate)}, {selectedDate}</strong>
-              </p>
             </div>
           </div>
         </div>
 
         {/* STEP 1B: BUS & FLEET SELECTION */}
         <div className="space-y-4 pt-4 border-t border-gray-100">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-500">
-              <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">B</span>
-              <span>Select Fleet Bus & Seating Template</span>
-            </div>
-            <span className="text-xs text-[#92400E] font-bold">
-              3 Official Fleet Buses
-            </span>
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-500">
+            <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">B</span>
+            <span>Bus &amp; Layout</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {fleetBuses.map((b) => {
               const isSelected = b.id === selectedBusId
               const tpl = getBusTemplate(b.templateId)
@@ -398,7 +466,7 @@ export function DailyRouteBusScheduler() {
                 <div
                   key={b.id}
                   onClick={() => setSelectedBusId(b.id)}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all relative ${
+                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all relative ${
                     isSelected
                       ? 'border-[#F8B018] bg-[#FFFDF5] ring-2 ring-[#F8B018]/25 shadow-xs'
                       : 'border-gray-200 bg-gray-50/70 hover:bg-gray-100/80 text-gray-700'
@@ -421,20 +489,9 @@ export function DailyRouteBusScheduler() {
                     </span>
                   </div>
 
-                  <h3 className="font-extrabold text-sm text-gray-900 mt-2.5 leading-snug">
+                  <h3 className="font-extrabold text-xs text-gray-900 mt-2 leading-snug">
                     {b.busName}
                   </h3>
-
-                  <div className="mt-2.5 pt-2 border-t border-gray-200/60 text-xs text-gray-600 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">Driver:</span>
-                      <strong className="text-gray-800">{b.driverName}</strong>
-                    </div>
-                    <div className="flex items-center justify-between font-mono text-[11px]">
-                      <span className="text-gray-400 font-sans">Contact:</span>
-                      <span>{b.driverMobile}</span>
-                    </div>
-                  </div>
 
                   {isSelected && (
                     <div className="absolute -top-2 -right-2 w-6 h-6 bg-[#F8B018] text-white rounded-full flex items-center justify-center shadow-xs">
@@ -452,7 +509,7 @@ export function DailyRouteBusScheduler() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-500">
               <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">C</span>
-              <span>Seat Pattern Customization · {activeTemplate.name} ({activeTemplate.capacity} Seats)</span>
+              <span>Seat Layout ({activeTemplate.capacity} Seats)</span>
             </div>
 
             {/* Quick Bulk Presets */}
@@ -470,7 +527,7 @@ export function DailyRouteBusScheduler() {
                 onClick={() => applyPreset('ladies-front')}
                 className="px-2.5 py-1 bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-800 rounded-lg font-bold"
               >
-                Ladies Front Rows
+                Ladies Front
               </button>
               <button
                 type="button"
@@ -479,62 +536,63 @@ export function DailyRouteBusScheduler() {
               >
                 Reserve Conductor
               </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('sample-bookings')}
-                className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-900 rounded-lg font-bold"
-              >
-                Simulate 10 Booked
-              </button>
             </div>
           </div>
 
           {/* Tool Palette & Legend */}
-          <div className="bg-gray-50 rounded-2xl border border-gray-200 p-4 space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <span className="text-xs font-bold uppercase text-gray-600">
-                1. Select Seat Tool → 2. Click any seat on map to apply
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTool('available')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
-                    activeTool === 'available'
-                      ? 'bg-white border-emerald-500 text-emerald-800 ring-2 ring-emerald-200 shadow-xs'
-                      : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
-                  }`}
-                >
-                  <span className="w-2.5 h-2.5 rounded-full border border-gray-400 bg-white" />
-                  <span>Available (Open)</span>
-                </button>
+          <div className="bg-gray-50 rounded-2xl border border-gray-200 p-3.5 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveTool('available')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
+                  activeTool === 'available'
+                    ? 'bg-white border-emerald-500 text-emerald-800 ring-2 ring-emerald-200 shadow-xs'
+                    : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full border border-gray-400 bg-white" />
+                <span>Available</span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTool('blocked')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
-                    activeTool === 'blocked'
-                      ? 'bg-amber-50 border-amber-500 text-amber-900 ring-2 ring-amber-200 shadow-xs'
-                      : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
-                  }`}
-                >
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                  <span>Blocked / Conductor</span>
-                </button>
+              <button
+                type="button"
+                onClick={() => setActiveTool('blocked')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
+                  activeTool === 'blocked'
+                    ? 'bg-amber-50 border-amber-500 text-amber-900 ring-2 ring-amber-200 shadow-xs'
+                    : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-gray-900" />
+                <span>Blocked / Crew</span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActiveTool('female')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
-                    activeTool === 'female'
-                      ? 'bg-pink-50 border-pink-500 text-pink-900 ring-2 ring-pink-200 shadow-xs'
-                      : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
-                  }`}
-                >
-                  <span className="w-2.5 h-2.5 rounded-full bg-pink-500" />
-                  <span>Ladies Reserved</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTool('female')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
+                  activeTool === 'female'
+                    ? 'bg-pink-100 border-pink-500 text-pink-900 ring-2 ring-pink-200 shadow-xs'
+                    : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-pink-500" />
+                <span>Female</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTool('male')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
+                  activeTool === 'male'
+                    ? 'bg-blue-100 border-blue-500 text-blue-900 ring-2 ring-blue-200 shadow-xs'
+                    : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
+                }`}
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <span>Male</span>
+              </button>
             </div>
 
             {/* Real-time Seat Count Counters */}
@@ -704,13 +762,13 @@ export function DailyRouteBusScheduler() {
         <div className="space-y-4 pt-4 border-t border-gray-100">
           <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-500">
             <span className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">D</span>
-            <span>Departure Timetable & Ticket Pricing</span>
+            <span>Schedule &amp; Fare</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Departure Time */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-700">Departure Time</label>
+              <label className="text-xs font-bold text-gray-700">Departure</label>
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5">
                 <Clock size={16} className="text-[#F8B018]" />
                 <input
@@ -737,7 +795,7 @@ export function DailyRouteBusScheduler() {
 
             {/* Arrival Time */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-700">Estimated Arrival Time</label>
+              <label className="text-xs font-bold text-gray-700">Arrival</label>
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5">
                 <Clock size={16} className="text-gray-400" />
                 <input
@@ -748,12 +806,11 @@ export function DailyRouteBusScheduler() {
                   className="bg-transparent text-sm font-bold text-gray-900 outline-none w-full"
                 />
               </div>
-              <span className="text-[11px] text-gray-400">Duration: ~3 hours 15 mins</span>
             </div>
 
             {/* Fare */}
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-gray-700">Ticket Fare (₹ per seat)</label>
+              <label className="text-xs font-bold text-gray-700">Fare (₹)</label>
               <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5">
                 <DollarSign size={16} className="text-emerald-600" />
                 <input
@@ -766,42 +823,36 @@ export function DailyRouteBusScheduler() {
                   className="bg-transparent text-sm font-bold text-gray-900 outline-none w-full"
                 />
               </div>
-              <span className="text-[11px] text-gray-400">Standard Uday Travels Fare</span>
             </div>
           </div>
         </div>
 
         {/* SUBMIT BUTTON */}
-        <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-          <div className="text-xs text-gray-500">
-            Publishing saves directly to Firestore and reflects immediately on the user portal.
-          </div>
-
+        <div className="pt-4 border-t border-gray-100 flex items-center justify-end">
           <button
             type="submit"
             disabled={publishing}
-            className="inline-flex items-center gap-2.5 px-6 py-3.5 bg-[#F8B018] hover:bg-[#E09A0A] text-white font-extrabold text-sm uppercase tracking-wider rounded-2xl shadow-md shadow-[#F8B018]/25 transition-transform active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-3 bg-[#F8B018] hover:bg-[#E09A0A] text-white font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-xs transition-transform active:scale-95 disabled:opacity-50"
           >
             {publishing ? (
-              <Loader2 size={18} className="animate-spin" />
+              <Loader2 size={16} className="animate-spin" />
             ) : (
-              <Plus size={18} />
+              <Plus size={16} />
             )}
-            <span>Publish Route Schedule for {selectedDate}</span>
+            <span>Publish Schedule</span>
           </button>
         </div>
       </form>
 
       {/* SCHEDULED TRIPS LIST ON SELECTED ROUTE & DATE */}
-      <div className="bg-white rounded-3xl border border-gray-200 p-6 md:p-8 space-y-5 shadow-xs">
-        <div className="flex items-center justify-between">
+      <div className="bg-white rounded-3xl border border-gray-200 p-6 md:p-8 space-y-4 shadow-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-base font-extrabold text-gray-900">
-              Active Scheduled Departures ({scheduledTrips.length})
+            <h3 className="text-base sm:text-lg font-extrabold text-gray-900">
+              Published Departures ({scheduledTrips.length})
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Route: <strong className="text-gray-800">{ROUTES[selectedRoute].name}</strong> · Date:{' '}
-              <strong className="text-gray-800">{weekdayLabel(selectedDate)}, {selectedDate}</strong>
+            <p className="text-xs text-gray-500">
+              Active departures scheduled for {selectedRoute === 'AHM_PUN' ? 'Ahilyanagar → Pune' : 'Pune → Ahilyanagar'} on {formatDate(selectedDate)}
             </p>
           </div>
 
@@ -809,7 +860,7 @@ export function DailyRouteBusScheduler() {
             type="button"
             onClick={fetchDailyTrips}
             disabled={loadingSchedule}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 text-xs font-bold rounded-xl transition-all cursor-pointer shrink-0"
           >
             <RefreshCw size={13} className={loadingSchedule ? 'animate-spin' : ''} />
             <span>Sync</span>
@@ -830,18 +881,21 @@ export function DailyRouteBusScheduler() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {scheduledTrips.map((t) => (
               <div
                 key={t.tripId}
-                className="p-5 bg-gray-50/70 border border-gray-200 rounded-2xl space-y-3 hover:border-[#F8B018] transition-colors relative"
+                className="p-4 sm:p-5 bg-white border border-gray-200 hover:border-[#F8B018] rounded-2xl space-y-3.5 transition-all shadow-xs hover:shadow-md flex flex-col justify-between"
               >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-extrabold text-sm text-gray-900">{t.busName}</h4>
+                {/* Header: Title, Layout Badge, Bus Number & Price Tag */}
+                <div className="flex flex-wrap items-start justify-between gap-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="font-extrabold text-sm sm:text-base text-gray-900 leading-snug">
+                        {t.busName}
+                      </h4>
                       {t.templateId && (
-                        <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-200 font-extrabold px-1.5 py-0.2 rounded-md">
+                        <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-200 font-extrabold px-1.5 py-0.5 rounded-md shrink-0">
                           {t.templateId}
                         </span>
                       )}
@@ -851,42 +905,73 @@ export function DailyRouteBusScheduler() {
                     </span>
                   </div>
 
-                  <span className="text-xs font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg">
+                  <span className="text-xs sm:text-sm font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl shrink-0">
                     ₹{t.fare}
                   </span>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-gray-600 font-medium pt-1">
-                  <div className="flex items-center gap-1.5">
-                    <Clock size={13} className="text-[#F8B018]" />
+                {/* Timing & Seats */}
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600 font-medium pt-1">
+                  <div className="flex items-center gap-1.5 bg-amber-50/70 border border-amber-200/60 px-2.5 py-1 rounded-lg text-gray-800 font-bold shrink-0">
+                    <Clock size={13} className="text-[#F8B018] shrink-0" />
                     <span>
                       {t.departureTime} → {t.arrivalTime}
                     </span>
                   </div>
-                  <div>
-                    <span>Total Seats: </span>
-                    <strong className="text-gray-900 font-mono">{t.totalSeats || t.totalCapacity || 55}</strong>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs shrink-0 flex items-center gap-1.5 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                      <span className="text-gray-600 font-medium">Occupancy:</span>
+                      <strong className={`font-mono font-bold ${Number(t.booked || 0) > 0 ? 'text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded' : 'text-gray-900'}`}>
+                        {t.booked || 0} / {t.totalSeats || t.totalCapacity || 55} Booked
+                      </strong>
+                    </div>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between">
-                  <a
-                    href={`/availability?route=${selectedRoute}&date=${selectedDate}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-xs font-bold text-[#92400E] hover:underline flex items-center gap-1"
-                  >
-                    <span>Preview on User Site</span>
-                    <ArrowRight size={12} />
-                  </a>
+                {/* Bottom Actions Row: Live Seat Map, Passenger List (PDF), Preview, and Delete */}
+                <div className="pt-2.5 border-t border-gray-200/70 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                    {onSelectTripForSeats && (
+                      <button
+                        type="button"
+                        onClick={() => onSelectTripForSeats(t, selectedDate, selectedRoute)}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-black text-white bg-slate-900 hover:bg-black active:scale-[0.98] rounded-xl transition-all shadow-xs shrink-0 cursor-pointer"
+                        title="View Live Interactive Seat Map & Real-time Bookings"
+                      >
+                        <Armchair size={13} className="text-[#F8B018] shrink-0" />
+                        <span>Live Seat Map</span>
+                      </button>
+                    )}
+
+                    <a
+                      href={`/api/admin/manifest/pdf?tripId=${t.tripId}&date=${selectedDate}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 text-xs font-extrabold text-gray-950 bg-[#F8B018] hover:bg-[#e09b0b] active:scale-[0.98] rounded-xl transition-all shadow-xs shrink-0 cursor-pointer"
+                      title="Download Passenger List PDF (Name, Pickup, Drop, Phone)"
+                    >
+                      <FileDown size={13} className="shrink-0" />
+                      <span>Passenger List (PDF)</span>
+                    </a>
+
+                    <a
+                      href={`/availability?route=${selectedRoute}&date=${selectedDate}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-bold text-[#92400E] hover:text-black hover:bg-amber-100/60 rounded-xl transition-colors shrink-0"
+                    >
+                      <span>Preview</span>
+                      <ArrowRight size={12} className="shrink-0" />
+                    </a>
+                  </div>
 
                   <button
                     type="button"
                     onClick={() => handleDeleteTrip(t.tripId, t.busName)}
-                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-1.5 sm:p-2 text-red-500 hover:text-red-700 hover:bg-red-50 active:scale-95 rounded-xl transition-all cursor-pointer shrink-0 ml-auto sm:ml-0"
                     title="Delete this schedule"
                   >
-                    <Trash2 size={15} />
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>

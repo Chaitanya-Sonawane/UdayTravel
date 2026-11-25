@@ -7,9 +7,14 @@ export interface TripDocument {
   tripId: string
   routeId: string
   busId: string
+  busName?: string
+  busNumber?: string
+  coachLabel?: string
+  seatLayout?: string
   travelDate: string
   departureTime: string
   arrivalTime: string
+  duration?: string
   fare: number
   status: 'active' | 'completed' | 'cancelled'
   availableSeats: number
@@ -194,25 +199,107 @@ export class TripsRepository {
     const trips: TripDocument[] = []
     const now = new Date().toISOString()
 
+    const routeDefaults: Record<RouteId, Array<{
+      dep: string
+      arr: string
+      busId: string
+      busNumber: string
+      busName: string
+      coachLabel: string
+      totalSeats: number
+      availableSeats: number
+    }>> = {
+      AHM_PUN: [
+        {
+          dep: '05:30',
+          arr: '08:45',
+          busId: 'bus_mh16dv1003',
+          busNumber: 'MH 16 DV 1003',
+          busName: 'Uday Express 44-Seater (2+2 Layout)',
+          coachLabel: '2+2 Coach (44 Seats)',
+          totalSeats: 44,
+          availableSeats: 18,
+        },
+        {
+          dep: '06:30',
+          arr: '09:45',
+          busId: 'bus_mh16dp4951',
+          busNumber: 'MH 16 DP 4951',
+          busName: 'Uday Express 55-Seater (2+3 Layout)',
+          coachLabel: '2+3 Coach (55 Seats)',
+          totalSeats: 55,
+          availableSeats: 29,
+        },
+        {
+          dep: '14:00',
+          arr: '17:15',
+          busId: 'bus_mh16dp3951',
+          busNumber: 'MH 16 DP 3951',
+          busName: 'Uday Express 33-Seater (2+2 Compact)',
+          coachLabel: '2+2 Coach (33 Seats)',
+          totalSeats: 33,
+          availableSeats: 12,
+        },
+      ],
+      PUN_AHM: [
+        {
+          dep: '06:30',
+          arr: '09:45',
+          busId: 'bus_mh16dv1003',
+          busNumber: 'MH 16 DV 1003',
+          busName: 'Uday Express 44-Seater (2+2 Layout)',
+          coachLabel: '2+2 Coach (44 Seats)',
+          totalSeats: 44,
+          availableSeats: 22,
+        },
+        {
+          dep: '10:00',
+          arr: '13:15',
+          busId: 'bus_mh16dp4951',
+          busNumber: 'MH 16 DP 4951',
+          busName: 'Uday Express 55-Seater (2+3 Layout)',
+          coachLabel: '2+3 Coach (55 Seats)',
+          totalSeats: 55,
+          availableSeats: 31,
+        },
+        {
+          dep: '17:00',
+          arr: '20:15',
+          busId: 'bus_mh16dp3951',
+          busNumber: 'MH 16 DP 3951',
+          busName: 'Uday Express 33-Seater (2+2 Compact)',
+          coachLabel: '2+2 Coach (33 Seats)',
+          totalSeats: 33,
+          availableSeats: 16,
+        },
+      ],
+    }
+
     for (const rKey of routeKeys) {
-      const routeCfg = ROUTES[rKey]
-      if (!routeCfg) continue
-      for (const dep of routeCfg.departures) {
-        const hhmm = dep.replace(':', '')
+      const defs = routeDefaults[rKey] || []
+      for (const d of defs) {
+        const hhmm = d.dep.replace(':', '')
         const id = `trip_${rKey}_${hhmm}_${travelDate.replace(/-/g, '')}`
+        const bookedCount = d.totalSeats - d.availableSeats
+        const bookedSeats = Array.from({ length: bookedCount }, (_, idx) => String(idx + 1))
+
         trips.push({
           id,
           tripId: id,
           routeId: rKey,
-          busId: 'bus_mh16dp4951',
+          busId: d.busId,
+          busNumber: d.busNumber,
+          busName: d.busName,
+          coachLabel: d.coachLabel,
           travelDate,
-          departureTime: dep,
-          arrivalTime: calculateArrivalTime(dep, routeCfg.durationMin),
+          departureTime: d.dep,
+          arrivalTime: d.arr,
+          duration: '03h 15m',
           fare: 200,
           status: 'active',
-          availableSeats: 50,
-          bookedSeats: [],
-          totalSeats: 50,
+          availableSeats: d.availableSeats,
+          bookedSeats,
+          totalSeats: d.totalSeats,
           createdAt: now,
           updatedAt: now,
         })

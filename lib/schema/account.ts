@@ -44,6 +44,7 @@ export type AccountUpdateInput = z.infer<typeof AccountUpdateSchema>
 
 export interface UserProfile extends AccountCreateInput {
   uid: string
+  passwordHash?: string
   createdAt: string
   updatedAt: string
 }

@@ -23,3 +23,9 @@ serviceAccountKey.json
 tsconfig.tsbuildinfo
 *.log
 _archive_legacy/
+*.pdf
+*.zip
+screenshots/
+scratch/
+/*.png
+!public/

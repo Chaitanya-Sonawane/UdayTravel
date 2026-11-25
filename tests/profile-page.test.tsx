@@ -14,17 +14,20 @@ vi.mock('next/navigation', () => ({
 }))
 
 describe('Profile / Account Page - Screenshot-matched UI', () => {
-  it('renders the brand header with UT logo mark and UDAY TRAVELS', () => {
-    const html = renderToString(<AccountPage />)
-    expect(html).toContain('UDAY TRAVELS')
-    expect(html).toContain('UT')
-    expect(html).toContain('availability-header')
-    expect(html).toContain('aria-label="Open menu"')
+  it('renders the brand header on all account modes including create account and login', () => {
+    const htmlLogin = renderToString(<AccountPageContent initialAuthMode="login" />)
+    expect(htmlLogin).toContain('availability-header')
+    expect(htmlLogin).toContain('aria-label="Open menu"')
+
+    // User requirement: put the navigation header on top of CREATE YOUR ACCOUNT
+    const htmlRegister = renderToString(<AccountPageContent initialAuthMode="register" />)
+    expect(htmlRegister).toContain('availability-header')
+    expect(htmlRegister).toContain('aria-label="Open menu"')
   })
 
-  it('renders the hero section with eyebrow and bold typography', () => {
+  it('renders the hero section with bold typography', () => {
     const html = renderToString(<AccountPage />)
-    expect(html).toContain('01 / PROFILE')
+    expect(html).not.toContain('01 / PROFILE')
     expect(html).not.toContain('01 / PASSENGER PROFILE')
     expect(html).toContain('availability-hero')
     expect(html).toContain('availability-hero-copy')

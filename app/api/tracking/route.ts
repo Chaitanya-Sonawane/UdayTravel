@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { updateTrackingInRtdb, RtdbTrackingState } from '@/lib/firebase/rtdb'
 import { requireAdmin } from '@/lib/server/admin-guard'

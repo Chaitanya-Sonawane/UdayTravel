@@ -15,8 +15,9 @@ import {
   Radio,
   RefreshCw,
   Route,
+  Loader2,
 } from 'lucide-react'
-import { subscribeToTracking, RtdbTrackingState } from '@/lib/firebase/rtdb'
+import { subscribeToTracking, RtdbTrackingState } from '@/lib/firebase/rtdb-client'
 
 function TrackContent() {
   const searchParams = useSearchParams()
@@ -77,15 +78,29 @@ function TrackContent() {
         </Link>
         <div className="text-center">
           <h1 className="text-base font-bold tracking-tight">Live Bus GPS Tracking</h1>
-          <p className="text-[11px] font-medium text-gray-500 flex items-center justify-center gap-1">
-            <span className={`inline-block w-2 h-2 rounded-full ${statusColor} animate-pulse`} />
-            Firebase Realtime Telemetry
+          <p className="text-[11px] font-medium text-gray-500 flex items-center justify-center gap-1.5 mt-0.5">
+            {!connected ? (
+              <span className="inline-flex items-center gap-1.5 text-[#B45309]">
+                <Loader2 size={12} className="animate-spin text-[#F8B018]" />
+                Connecting GPS signal...
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-emerald-600 font-semibold">
+                <span className={`inline-block w-2 h-2 rounded-full ${statusColor} animate-pulse`} />
+                Live GPS Active
+              </span>
+            )}
           </p>
         </div>
         <div className="w-8 flex items-center justify-end">
-          <span className="w-8 h-8 rounded-full bg-[#F8B018]/20 text-[#B87000] font-black text-xs flex items-center justify-center">
+          <Link
+            href="/"
+            className="w-8 h-8 rounded-lg bg-[#F8B018] text-[#0B0F19] font-black text-xs flex items-center justify-center shadow-xs transition-transform hover:scale-105"
+            style={{ backgroundColor: '#F8B018', color: '#0B0F19', fontWeight: 900 }}
+            title="Uday Travels Home"
+          >
             UT
-          </span>
+          </Link>
         </div>
       </header>
 
@@ -265,10 +280,17 @@ export default function TrackPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[#F8F9FA] flex items-center justify-center">
+        <main className="min-h-screen bg-[#F8F9FA] flex items-center justify-center font-jakarta animate-in fade-in duration-300">
           <div className="text-center">
-            <div className="w-8 h-8 border-2 border-[#F8B018] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-xs uppercase tracking-widest text-gray-500">Connecting GPS Telemetry...</p>
+            <div className="relative w-14 h-14 flex items-center justify-center mx-auto mb-3">
+              <div className="absolute inset-0 rounded-2xl bg-[#F8B018]/15 animate-ping" />
+              <div className="w-12 h-12 rounded-2xl bg-white border border-amber-200 shadow-sm flex items-center justify-center relative z-10">
+                <div className="w-6 h-6 rounded-full border-2 border-amber-100 border-t-[#F8B018] animate-spin" />
+              </div>
+            </div>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-700 font-mono">
+              Loading...
+            </p>
           </div>
         </main>
       }

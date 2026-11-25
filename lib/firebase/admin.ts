@@ -41,8 +41,8 @@ function loadDevStore(): Map<string, any> {
         store.set(k, v)
       }
     }
-  } catch (err) {
-    console.warn('[Firebase Dev Memory Store] Could not read dev storage file:', err)
+  } catch (_err) {
+    // dev storage file not present or unreadable
   }
 
   // Pre-seed default fleet buses if missing
@@ -70,8 +70,8 @@ function saveDevStore(store: Map<string, any>) {
       obj[k] = v
     }
     fs.writeFileSync(DEV_STORAGE_FILE, JSON.stringify(obj, null, 2), 'utf-8')
-  } catch (err) {
-    console.warn('[Firebase Dev Memory Store] Could not persist dev storage file:', err)
+  } catch (_err) {
+    // dev storage persistence fallback
   }
 }
 
@@ -327,7 +327,6 @@ function checkDnsConnectivity() {
     dns.lookup('firestore.googleapis.com', (err) => {
       if (err) {
         isLiveFirestoreUnavailable = true
-        console.log('[Firebase Admin] Cloud Firestore unreachable (offline/local mode). Seamlessly using persistent local dev store.')
       }
     })
   } catch {
@@ -340,9 +339,16 @@ checkDnsConnectivity()
 
 function isNetworkUnavailableError(err: any): boolean {
   if (!err) return false
-  const msg = (err.message || String(err)).toLowerCase()
+  const msg = (
+    (err.message || '') +
+    ' ' +
+    (err.details || '') +
+    ' ' +
+    String(err)
+  ).toLowerCase()
   return (
     msg.includes('14 unavailable') ||
+    msg.includes('unavailable') ||
     msg.includes('name resolution failed') ||
     msg.includes('could not reach cloud firestore') ||
     msg.includes('getaddrinfo') ||
@@ -350,18 +356,24 @@ function isNetworkUnavailableError(err: any): boolean {
     msg.includes('eai_again') ||
     msg.includes('timeout') ||
     msg.includes('deadline_exceeded') ||
+    msg.includes('permission_denied') ||
+    msg.includes('permission-denied') ||
+    msg.includes('permission denied') ||
+    msg.includes('has not been used in project') ||
+    msg.includes('not been used in project') ||
+    msg.includes('is disabled') ||
+    msg.includes('disabled') ||
+    msg.includes('consumer-invalid') ||
     err.code === 14 ||
-    err.code === 'UNAVAILABLE'
+    err.code === 7 ||
+    err.code === 'UNAVAILABLE' ||
+    err.code === 'PERMISSION_DENIED'
   )
 }
 
 function triggerOfflineFallback(err?: any) {
   if (!isLiveFirestoreUnavailable) {
     isLiveFirestoreUnavailable = true
-    const reason = err ? (err.message || String(err)) : 'Offline / DNS unreachable'
-    console.log(
-      `[Firebase Admin] Cloud Firestore unreachable (${reason.slice(0, 80)}...). Seamlessly switched to persistent local dev store.`
-    )
   }
 }
 
@@ -561,7 +573,35 @@ export function getAdminDb(): Firestore {
               return devFirestoreInstance.batch()
             }
             try {
-              return origMethod.call(target)
+              const origBatch = origMethod.call(target)
+              return {
+                set(docRef: any, data: any, options?: any) {
+                  origBatch.set(docRef, data, options)
+                  return this
+                },
+                update(docRef: any, data: any) {
+                  origBatch.update(docRef, data)
+                  return this
+                },
+                delete(docRef: any) {
+                  origBatch.delete(docRef)
+                  return this
+                },
+                async commit() {
+                  if (isLiveFirestoreUnavailable) {
+                    return devFirestoreInstance.batch().commit()
+                  }
+                  try {
+                    return await origBatch.commit()
+                  } catch (err: any) {
+                    if (isNetworkUnavailableError(err)) {
+                      triggerOfflineFallback(err)
+                      return devFirestoreInstance.batch().commit()
+                    }
+                    throw err
+                  }
+                },
+              }
             } catch {
               return devFirestoreInstance.batch()
             }

@@ -70,6 +70,10 @@ export interface TripAvailabilityItem {
   tripId: string
   busName: string
   busType?: string
+  busNumber?: string
+  coachLabel?: string
+  layoutType?: string
+  templateId?: string
   departure: string // ISO string with +05:30
   arrival: string // ISO string with +05:30
   departureTime: string // HH:mm

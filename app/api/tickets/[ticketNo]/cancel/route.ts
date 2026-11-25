@@ -1,3 +1,4 @@
+export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/server/guard'
 import { cancelBooking } from '@/lib/payments/cancel'
@@ -21,7 +22,7 @@ export async function POST(
     )
   }
 
-  let body: { reason?: string } = {}
+  let body: { reason?: string; selectedSeats?: string[] } = {}
   try {
     body = await req.json()
   } catch {
@@ -36,6 +37,7 @@ export async function POST(
       callerUid: auth.uid,
       isAnonymous,
       reason: body.reason,
+      selectedSeats: body.selectedSeats,
     })
 
     const notif = buildCancellationNotification(result.ticket, {
