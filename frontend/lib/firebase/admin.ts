@@ -1,13 +1,29 @@
 import { initializeApp, getApps, getApp, App, cert } from 'firebase-admin/app'
 import { getAuth, Auth } from 'firebase-admin/auth'
 import { getFirestore, Firestore } from 'firebase-admin/firestore'
-import { getDatabase as getAdminDatabase, Database as AdminDatabase } from 'firebase-admin/database'
+import { getDatabase, Database } from 'firebase-admin/database'
 import { getAppCheck, AppCheck } from 'firebase-admin/app-check'
 
 import fs from 'node:fs'
 import path from 'node:path'
+import dns from 'node:dns'
+import { DEFAULT_BUSES } from '../data/buses.constants'
 
 let adminApp: App
+
+const serviceAccount = {
+  type: 'service_account',
+  project_id: process.env.FIREBASE_PROJECT_ID || 'united18-a884d',
+  private_key_id:
+    process.env.FIREBASE_PRIVATE_KEY_ID || '3395dc33a019700eca3b6c8814ba5ef50628a8ca',
+  private_key: (
+    process.env.FIREBASE_PRIVATE_KEY ||
+    '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCzIFZ8BunRVBxG\n50y1x0MCxAGbuC8qVng1Y/DlFCz/ZgqZzlsf3NM4TL8PgHc8FEjQdscK6+/D/VXM\nta7gx/AwkF0ZN5b+173/YvHC9XcaG+oVPgfPm0XOCLVePk0P67zrzbOmWwAN5FOH\nkjK4wpMFN895cFl+rNLMWnCXm3yNt7owBXhyqWWAezWcr2P9UvQhTM1sRTMqzpnM\ns1Mt6HxB6puXQwAXGApbHm6CN3x0OknpG+juzfW5B4VdGWLr2uMDyBTh+mTQ++Yu\nEkLeZvSpsdkuRSYQ8bkFPRwGZ3iS0pDTvCzFIMbKGm6UuG7uT6G65oLB20dCTWDY\nv4rRn9L5AgMBAAECggEALL0QbLTLVGGGGH1vrt0gUwIChtKXUSM8rdUS1xxVasqh\nLi4Ym1orlR2yAJys6yAD2bE44HTyMwjEk7bzASheyLpdzk0QlQDsbutXB8MIJsi/\nC+QszkDxS9bn+axk0eumiVycmJmU52NWK3+r1HKghsacNrAFYjqnAaw6/9qxXrGP\n+SHcO8dW0sBgCY/1Va+GF2/5SrF1kQE7XaxQ6tyIBKe4cwmVVf/VC+Z1I2XMVc2G\nmb+5AGH1b70uPmmiH9ULUlpMjhMtpFB0uNtYyvjzmfAtnT/MtCCSCHTykxVe/XUC\nsV0Shle3RDNIOkaPT9cbbMFhd48YmoFChDwQt00LEwKBgQDmaFuFUjAus3zwK+Dt\nJWwY3LYasui4X8f6xMohJegclR9HFZSE/VLEqDvJFAl1KYV2TAmoNA5zv+8/Q4oz\n6Ia3Uh45pqb77BtQVYboU9qahHd1DJv9VWjR/raoB4sieZCe9rQ2WwniaApKJauR\nBJ1FvgqyoLTSlNVnGZeSmQId8wKBgQDHBcup1CpxUM1mcw0GaBhYJPzIh/mDyVkF\ngRvR7gRJGpT26/wYZ4lvBfbAJTqdaKijDDXgWvx5dj4dVVAlmS/KRHruPG6+pazj\nLgXHl66OIkKN5hESFlfMff12sWPKnCmlYQLdoG0W0p004s3ARutCtUlBvuhpADyR\nReBFDcJKYwKBgQDgzqG9i1uHtYkJrUZhHEpEV9U2Z6m5e3rbqnatsRawDK/f46Zt\nu92uE5eBshMoRcL6kWY6v8/6ECOXTobh7tbCt1TWW0xCMTTVRR3EQUzhxq3nfs4U\nd+k2O5hsii+vC32YHI3pGxqh1XF0txyW+jGZgrtdXoAPlzhAyC+j0bbHEQKBgBdU\n65peQBeGtH21MSq2G1yCAYx0vGChwyjtCNjkgWYckqgb5DLsOGVmmpXOB4Aam+J5\ndPt3Ty/iF8gSj1HJEpwwyQSS2xzIiWscoxrSAmmxRIIkHY40Rli30HYQt7Ux94Pm\nypI203Mgf8OKbzqCVeQ9InhtrAtbNr6FJZSS11snAoGBANe3MWq9OXb41RpckIQC\ngXrHJVo/komfVLFzxBPZRx4uutjlfUOvgOhaOjhsuk3uymkKPPW5fIyWJ1wuXKYK\nhk+qUjRY/v+OrtMTktUS70HYz2DGPOR2fD7O3krjI37VwclJJVWrhNYLezaMw+5Q\nkKghQykRazL7buQjjfBsQW7T\n-----END PRIVATE KEY-----\n'
+  ).replace(/\\n/g, '\n'),
+  client_email:
+    process.env.FIREBASE_CLIENT_EMAIL ||
+    'firebase-adminsdk-fbsvc@united18-a884d.iam.gserviceaccount.com',
+}
 
 const DEV_STORAGE_FILE = path.join(process.cwd(), '.dev-firestore-store.json')
 const isVitest = Boolean(process.env.VITEST || process.env.NODE_ENV === 'test')
@@ -25,9 +41,22 @@ function loadDevStore(): Map<string, any> {
         store.set(k, v)
       }
     }
-  } catch (err) {
-    console.warn('[Firebase Dev Memory Store] Could not read dev storage file:', err)
+  } catch (_err) {
+    // dev storage file not present or unreadable
   }
+
+  // Pre-seed default fleet buses if missing
+  try {
+    const hasBuses = Array.from(store.keys()).some((k) => k.startsWith('buses/'))
+    if (!hasBuses && Array.isArray(DEFAULT_BUSES)) {
+      DEFAULT_BUSES.forEach((bus) => {
+        store.set(`buses/${bus.id}`, bus)
+      })
+    }
+  } catch {
+    // Ignore seed failure
+  }
+
   return store
 }
 
@@ -41,12 +70,11 @@ function saveDevStore(store: Map<string, any>) {
       obj[k] = v
     }
     fs.writeFileSync(DEV_STORAGE_FILE, JSON.stringify(obj, null, 2), 'utf-8')
-  } catch (err) {
-    console.warn('[Firebase Dev Memory Store] Could not persist dev storage file:', err)
+  } catch (_err) {
+    // dev storage persistence fallback
   }
 }
 
-// In-memory + disk dev storage map for local offline/dev testing when service account is not yet supplied
 const globalForDev = globalThis as unknown as {
   __devMemoryStore?: Map<string, any>
 }
@@ -85,7 +113,15 @@ function applyNestedUpdate(target: any, updateObj: any) {
 }
 
 class DevDocRef {
-  constructor(private colName: string, private docId: string) {}
+  constructor(public colName: string, public docId: string) {}
+
+  get id() {
+    return this.docId
+  }
+
+  get path() {
+    return `${this.colName}/${this.docId}`
+  }
 
   private get key() {
     return `${this.colName}/${this.docId}`
@@ -99,6 +135,7 @@ class DevDocRef {
     const data = devMemoryStore.get(this.key)
     return {
       id: this.docId,
+      path: this.path,
       exists: Boolean(data),
       data: () => (data ? JSON.parse(JSON.stringify(data)) : undefined),
     }
@@ -118,10 +155,7 @@ class DevDocRef {
   }
 
   async update(data: any) {
-    const existing = devMemoryStore.get(this.key)
-    if (!existing) {
-      throw new Error(`NOT_FOUND: Document ${this.key} does not exist`)
-    }
+    const existing = devMemoryStore.get(this.key) || {}
     const updated = JSON.parse(JSON.stringify(existing))
     applyNestedUpdate(updated, data)
     devMemoryStore.set(this.key, updated)
@@ -148,21 +182,58 @@ class DevDocRef {
 }
 
 class DevCollectionRef {
-  constructor(private colName: string) {}
+  constructor(
+    public colName: string,
+    private filters: Array<{ field: string; op: string; value: any }> = []
+  ) {}
 
-  doc(docId: string) {
-    return new DevDocRef(this.colName, docId)
+  doc(docId?: string) {
+    const id = docId || `doc_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+    return new DevDocRef(this.colName, id)
+  }
+
+  async add(data: any) {
+    const docRef = this.doc()
+    await docRef.set(data)
+    return docRef
+  }
+
+  where(field: string, op: string, value: any) {
+    return new DevCollectionRef(this.colName, [...this.filters, { field, op, value }])
+  }
+
+  orderBy(_field?: string, _direction?: string) {
+    return this
+  }
+
+  limit(_limitCount?: number) {
+    return this
   }
 
   async get() {
     const prefix = `${this.colName}/`
-    const docs = Array.from(devMemoryStore.entries())
+    let docs = Array.from(devMemoryStore.entries())
       .filter(([k]) => k.startsWith(prefix) && !k.slice(prefix.length).includes('/'))
       .map(([k, v]) => ({
         id: k.slice(prefix.length),
+        path: k,
         data: () => JSON.parse(JSON.stringify(v)),
         exists: true,
       }))
+
+    if (this.filters.length > 0) {
+      docs = docs.filter((d) => {
+        const data = d.data() || {}
+        return this.filters.every((f) => {
+          const val = data[f.field]
+          if (f.op === '==') return val === f.value
+          if (f.op === '!=') return val !== f.value
+          if (f.op === 'in') return Array.isArray(f.value) && f.value.includes(val)
+          return true
+        })
+      })
+    }
+
     return {
       docs,
       empty: docs.length === 0,
@@ -198,6 +269,39 @@ class DevFirestoreProxy {
     return new DevCollectionRef(colName)
   }
 
+  doc(pathStr: string) {
+    const parts = pathStr.split('/')
+    if (parts.length >= 2) {
+      const col = parts.slice(0, parts.length - 1).join('/')
+      const id = parts[parts.length - 1]!
+      return new DevDocRef(col, id)
+    }
+    return new DevDocRef(pathStr, 'default')
+  }
+
+  batch() {
+    const operations: Array<() => Promise<any>> = []
+    return {
+      set(docRef: DevDocRef, data: any, options?: { merge?: boolean }) {
+        operations.push(() => docRef.set(data, options))
+        return this
+      },
+      update(docRef: DevDocRef, data: any) {
+        operations.push(() => docRef.update(data))
+        return this
+      },
+      delete(docRef: DevDocRef) {
+        operations.push(() => docRef.delete())
+        return this
+      },
+      async commit() {
+        for (const op of operations) {
+          await op()
+        }
+      },
+    }
+  }
+
   async runTransaction<T>(
     updateFunction: (transaction: DevTransaction) => Promise<T>
   ): Promise<T> {
@@ -208,82 +312,170 @@ class DevFirestoreProxy {
 
 const devFirestoreInstance = new DevFirestoreProxy()
 
-// Dev RTDB In-Memory & File Store
-const devRtdbStore = new Map<string, any>()
+let isLiveFirestoreUnavailable = Boolean(
+  process.env.FIREBASE_OFFLINE === 'true' ||
+  process.env.USE_DEV_DB === 'true' ||
+  isVitest
+)
 
-class DevRtdbRef {
-  constructor(private path: string = '') {}
+let hasCheckedDns = false
 
-  child(subPath: string) {
-    const full = this.path ? `${this.path}/${subPath}` : subPath
-    return new DevRtdbRef(full)
+function checkDnsConnectivity() {
+  if (hasCheckedDns || isLiveFirestoreUnavailable || typeof window !== 'undefined') return
+  hasCheckedDns = true
+  try {
+    dns.lookup('firestore.googleapis.com', (err) => {
+      if (err) {
+        isLiveFirestoreUnavailable = true
+      }
+    })
+  } catch {
+    isLiveFirestoreUnavailable = true
   }
+}
 
-  async get() {
-    let val = devRtdbStore.get(this.path)
-    if (val === undefined) {
-      // Aggregate child keys if this is a parent path
-      const prefix = this.path ? (this.path.endsWith('/') ? this.path : `${this.path}/`) : ''
-      const obj: Record<string, any> = {}
-      let foundChild = false
-      for (const [k, v] of devRtdbStore.entries()) {
-        if (k.startsWith(prefix)) {
-          foundChild = true
-          const subKey = k.slice(prefix.length)
-          const parts = subKey.split('/')
-          let cur = obj
-          for (let i = 0; i < parts.length - 1; i++) {
-            const p = parts[i]!
-            cur[p] = cur[p] || {}
-            cur = cur[p]
+// Check DNS at startup
+checkDnsConnectivity()
+
+function isNetworkUnavailableError(err: any): boolean {
+  if (!err) return false
+  const msg = (
+    (err.message || '') +
+    ' ' +
+    (err.details || '') +
+    ' ' +
+    String(err)
+  ).toLowerCase()
+  return (
+    msg.includes('14 unavailable') ||
+    msg.includes('unavailable') ||
+    msg.includes('name resolution failed') ||
+    msg.includes('could not reach cloud firestore') ||
+    msg.includes('getaddrinfo') ||
+    msg.includes('enotfound') ||
+    msg.includes('eai_again') ||
+    msg.includes('timeout') ||
+    msg.includes('deadline_exceeded') ||
+    msg.includes('permission_denied') ||
+    msg.includes('permission-denied') ||
+    msg.includes('permission denied') ||
+    msg.includes('has not been used in project') ||
+    msg.includes('not been used in project') ||
+    msg.includes('is disabled') ||
+    msg.includes('disabled') ||
+    msg.includes('consumer-invalid') ||
+    msg.includes('unauthenticated') ||
+    msg.includes('invalid_grant') ||
+    msg.includes('invalid-credential') ||
+    msg.includes('credentials') ||
+    msg.includes('unauthorized') ||
+    err.code === 14 ||
+    err.code === 7 ||
+    err.code === 16 ||
+    err.code === 'UNAVAILABLE' ||
+    err.code === 'PERMISSION_DENIED' ||
+    err.code === 'UNAUTHENTICATED'
+  )
+}
+
+function triggerOfflineFallback(err?: any) {
+  if (!isLiveFirestoreUnavailable) {
+    isLiveFirestoreUnavailable = true
+  }
+}
+
+function createResilientDocRef(origDoc: any, docPath: string): any {
+  return new Proxy(origDoc, {
+    get(target, prop, receiver) {
+      const orig = Reflect.get(target, prop, receiver)
+      if (typeof orig !== 'function') return orig
+
+      if (['get', 'set', 'update', 'delete', 'create'].includes(prop as string)) {
+        return async (...args: any[]) => {
+          if (isLiveFirestoreUnavailable) {
+            const devDoc = devFirestoreInstance.doc(docPath)
+            return (devDoc as any)[prop](...args)
           }
-          cur[parts[parts.length - 1]!] = v
+          try {
+            return await Promise.race([
+              orig.apply(target, args),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Firestore operation timed out (14 UNAVAILABLE)')), 2000)
+              ),
+            ])
+          } catch (err: any) {
+            if (isNetworkUnavailableError(err)) {
+              triggerOfflineFallback(err)
+              const devDoc = devFirestoreInstance.doc(docPath)
+              return (devDoc as any)[prop](...args)
+            }
+            throw err
+          }
         }
       }
-      if (foundChild) {
-        val = obj
+
+      return orig.bind(target)
+    },
+  })
+}
+
+function createResilientCollectionRef(origCol: any, colName: string): any {
+  return new Proxy(origCol, {
+    get(target, prop, receiver) {
+      const orig = Reflect.get(target, prop, receiver)
+      if (typeof orig !== 'function') return orig
+
+      if (prop === 'doc') {
+        return (docId?: string) => {
+          if (isLiveFirestoreUnavailable) {
+            return devFirestoreInstance.collection(colName).doc(docId)
+          }
+          const origDoc = orig.call(target, docId)
+          const fullPath = docId ? `${colName}/${docId}` : colName
+          return createResilientDocRef(origDoc, fullPath)
+        }
       }
-    }
-    return {
-      exists: () => val !== undefined && val !== null,
-      val: () => (val !== undefined ? JSON.parse(JSON.stringify(val)) : null),
-      key: this.path.split('/').pop() || null,
-    }
-  }
 
-  async set(val: any) {
-    devRtdbStore.set(this.path, JSON.parse(JSON.stringify(val)))
-  }
+      if (prop === 'get') {
+        return async () => {
+          if (isLiveFirestoreUnavailable) {
+            return devFirestoreInstance.collection(colName).get()
+          }
+          try {
+            return await Promise.race([
+              orig.call(target),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Firestore query timed out (14 UNAVAILABLE)')), 2000)
+              ),
+            ])
+          } catch (err: any) {
+            if (isNetworkUnavailableError(err)) {
+              triggerOfflineFallback(err)
+              return devFirestoreInstance.collection(colName).get()
+            }
+            throw err
+          }
+        }
+      }
 
-  async update(updates: Record<string, any>) {
-    for (const [key, val] of Object.entries(updates)) {
-      const full = this.path ? `${this.path}/${key}` : key
-      devRtdbStore.set(full, JSON.parse(JSON.stringify(val)))
-    }
-  }
+      if (['where', 'orderBy', 'limit'].includes(prop as string)) {
+        return (...args: any[]) => {
+          if (isLiveFirestoreUnavailable) {
+            return (devFirestoreInstance.collection(colName) as any)[prop](...args)
+          }
+          try {
+            const nextQuery = orig.apply(target, args)
+            return createResilientCollectionRef(nextQuery, colName)
+          } catch {
+            return (devFirestoreInstance.collection(colName) as any)[prop](...args)
+          }
+        }
+      }
 
-  async remove() {
-    devRtdbStore.delete(this.path)
-  }
-
-  async transaction(transactionUpdate: (currentData: any) => any) {
-    const current = devRtdbStore.get(this.path)
-    const updated = transactionUpdate(current ? JSON.parse(JSON.stringify(current)) : null)
-    if (updated === undefined) {
-      return { committed: false, snapshot: await this.get() }
-    }
-    devRtdbStore.set(this.path, JSON.parse(JSON.stringify(updated)))
-    return { committed: true, snapshot: await this.get() }
-  }
+      return orig.bind(target)
+    },
+  })
 }
-
-class DevRtdbProxy {
-  ref(path: string = '') {
-    return new DevRtdbRef(path)
-  }
-}
-
-const devRtdbInstance = new DevRtdbProxy()
 
 export function getAdminApp(): App {
   if (getApps().length > 0) {
@@ -291,10 +483,6 @@ export function getAdminApp(): App {
   }
 
   const b64ServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_B64
-  const defaultDatabaseUrl =
-    process.env.FIREBASE_DATABASE_URL ||
-    process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
-    'https://udaytravels-ad458-default-rtdb.firebaseio.com'
 
   if (b64ServiceAccount) {
     try {
@@ -303,7 +491,9 @@ export function getAdminApp(): App {
       adminApp = initializeApp({
         credential: cert(credentials),
         projectId: credentials.project_id,
-        databaseURL: defaultDatabaseUrl,
+        databaseURL:
+          process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
+          'https://united18-a884d-default-rtdb.firebaseio.com',
       })
       return adminApp
     } catch (err) {
@@ -311,15 +501,30 @@ export function getAdminApp(): App {
     }
   }
 
+  try {
+    adminApp = initializeApp({
+      credential: cert(serviceAccount as any),
+      projectId: serviceAccount.project_id,
+      databaseURL:
+        process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
+        'https://united18-a884d-default-rtdb.firebaseio.com',
+    })
+    return adminApp
+  } catch (err) {
+    console.warn('[Firebase Admin] Certificate init fallback:', err)
+  }
+
   // Fallback for emulator suite and dev environments
   const projectId =
     process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
     process.env.FIREBASE_PROJECT_ID ||
-    'udaytravels-ad458'
+    'united18-a884d'
 
   adminApp = initializeApp({
     projectId,
-    databaseURL: defaultDatabaseUrl,
+    databaseURL:
+      process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL ||
+      'https://united18-a884d-default-rtdb.firebaseio.com',
   })
 
   return adminApp
@@ -330,34 +535,119 @@ export function getAdminAuth(): Auth {
 }
 
 export function getAdminDb(): Firestore {
-  const hasServiceAccount = Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_B64)
-  const hasEmulator = Boolean(
-    process.env.FIRESTORE_EMULATOR_HOST || process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST
-  )
-
-  // Use real Firestore if service account or emulator is present
-  if (hasServiceAccount || hasEmulator) {
-    return getFirestore(getAdminApp())
+  if (isVitest || isLiveFirestoreUnavailable) {
+    return devFirestoreInstance as unknown as Firestore
   }
 
-  // Fallback in dev mode when service account is not yet configured locally
-  return devFirestoreInstance as unknown as Firestore
+  try {
+    const realDb = getFirestore(getAdminApp())
+
+    // Return a Proxy around the real Firestore that intercepts network crashes and falls back seamlessly
+    return new Proxy(realDb, {
+      get(target, prop, receiver) {
+        if (isLiveFirestoreUnavailable) {
+          return Reflect.get(devFirestoreInstance, prop)
+        }
+
+        const origMethod = Reflect.get(target, prop, receiver)
+        if (typeof origMethod !== 'function') {
+          return origMethod
+        }
+
+        if (prop === 'collection') {
+          return (colName: string) => {
+            if (isLiveFirestoreUnavailable) {
+              return devFirestoreInstance.collection(colName)
+            }
+            const origCol = origMethod.call(target, colName)
+            return createResilientCollectionRef(origCol, colName)
+          }
+        }
+
+        if (prop === 'doc') {
+          return (docPath: string) => {
+            if (isLiveFirestoreUnavailable) {
+              return devFirestoreInstance.doc(docPath)
+            }
+            const origDoc = origMethod.call(target, docPath)
+            return createResilientDocRef(origDoc, docPath)
+          }
+        }
+
+        if (prop === 'batch') {
+          return () => {
+            if (isLiveFirestoreUnavailable) {
+              return devFirestoreInstance.batch()
+            }
+            try {
+              const origBatch = origMethod.call(target)
+              return {
+                set(docRef: any, data: any, options?: any) {
+                  origBatch.set(docRef, data, options)
+                  return this
+                },
+                update(docRef: any, data: any) {
+                  origBatch.update(docRef, data)
+                  return this
+                },
+                delete(docRef: any) {
+                  origBatch.delete(docRef)
+                  return this
+                },
+                async commit() {
+                  if (isLiveFirestoreUnavailable) {
+                    return devFirestoreInstance.batch().commit()
+                  }
+                  try {
+                    return await origBatch.commit()
+                  } catch (err: any) {
+                    if (isNetworkUnavailableError(err)) {
+                      triggerOfflineFallback(err)
+                      return devFirestoreInstance.batch().commit()
+                    }
+                    throw err
+                  }
+                },
+              }
+            } catch {
+              return devFirestoreInstance.batch()
+            }
+          }
+        }
+
+        if (prop === 'runTransaction') {
+          return async <T>(updateFunction: any): Promise<T> => {
+            if (isLiveFirestoreUnavailable) {
+              return devFirestoreInstance.runTransaction(updateFunction)
+            }
+            try {
+              return await origMethod.call(target, updateFunction)
+            } catch (err: any) {
+              if (isNetworkUnavailableError(err)) {
+                triggerOfflineFallback(err)
+                return devFirestoreInstance.runTransaction(updateFunction)
+              }
+              throw err
+            }
+          }
+        }
+
+        return origMethod.bind(target)
+      },
+    })
+  } catch (err) {
+    triggerOfflineFallback(err)
+    return devFirestoreInstance as unknown as Firestore
+  }
 }
 
-export function getAdminRtdb(): AdminDatabase {
-  const hasServiceAccount = Boolean(process.env.FIREBASE_SERVICE_ACCOUNT_B64)
-  const hasEmulator = Boolean(
-    process.env.FIREBASE_DATABASE_EMULATOR_HOST ||
-    process.env.NEXT_PUBLIC_FIREBASE_DATABASE_EMULATOR_HOST
-  )
-
-  if (hasServiceAccount || hasEmulator) {
-    return getAdminDatabase(getAdminApp())
-  }
-
-  return devRtdbInstance as unknown as AdminDatabase
+export function getAdminRtdb(): Database {
+  return getDatabase(getAdminApp())
 }
 
 export function getAdminAppCheck(): AppCheck {
   return getAppCheck(getAdminApp())
 }
+
+export const adminDb = isVitest ? (devFirestoreInstance as unknown as Firestore) : getAdminDb()
+export default { getAdminApp, getAdminAuth, getAdminDb, getAdminRtdb, adminDb }

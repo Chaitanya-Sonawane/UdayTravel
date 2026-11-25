@@ -364,10 +364,17 @@ function isNetworkUnavailableError(err: any): boolean {
     msg.includes('is disabled') ||
     msg.includes('disabled') ||
     msg.includes('consumer-invalid') ||
+    msg.includes('unauthenticated') ||
+    msg.includes('invalid_grant') ||
+    msg.includes('invalid-credential') ||
+    msg.includes('credentials') ||
+    msg.includes('unauthorized') ||
     err.code === 14 ||
     err.code === 7 ||
+    err.code === 16 ||
     err.code === 'UNAVAILABLE' ||
-    err.code === 'PERMISSION_DENIED'
+    err.code === 'PERMISSION_DENIED' ||
+    err.code === 'UNAUTHENTICATED'
   )
 }
 

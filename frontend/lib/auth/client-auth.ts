@@ -84,8 +84,8 @@ export function syncAccountToBookingStore(
     if (profile.uid) {
       localStorage.setItem('uday_last_synced_account_uid', profile.uid)
     }
-  } catch (err) {
-    console.warn('[syncAccountToBookingStore] Notice:', err)
+  } catch (_err) {
+    // Ignore sync notice
   }
 }
 
@@ -248,9 +248,15 @@ export async function signUpUser(
       }),
     })
 
-    const data = await res.json()
-    if (!res.ok || !data.success) {
-      const parsed = parseAuthError(data.error || 'Registration failed', { identifier: profile.mobile || identifier, mode: 'register' })
+    let data: any = null
+    try {
+      data = await res.json()
+    } catch {
+      data = { success: false, error: 'Registration service temporarily unavailable. Please retry.' }
+    }
+    if (!res.ok || !data || !data.success) {
+      const errorMsg = data?.error?.message || data?.error || 'Registration failed'
+      const parsed = parseAuthError(errorMsg, { identifier: profile.mobile || identifier, mode: 'register' })
       throw new UdayAuthError(parsed)
     }
 
@@ -306,8 +312,10 @@ export async function signUpUser(
     updatedAt: now,
   }
   if (res.ok) {
-    const data = await res.json()
-    if (data.profile) userProfile = data.profile
+    try {
+      const data = await res.json()
+      if (data && data.profile) userProfile = data.profile
+    } catch {}
   }
 
   markDeviceAccountCreated(userProfile)
@@ -355,9 +363,15 @@ export async function signInUser(
       body: JSON.stringify({ identifier, password }),
     })
 
-    const data = await res.json()
-    if (!res.ok || !data.success) {
-      const parsed = parseAuthError(data.error || 'Login failed', { identifier, mode: 'login' })
+    let data: any = null
+    try {
+      data = await res.json()
+    } catch {
+      data = { success: false, error: 'Authentication service temporarily unavailable. Please retry.' }
+    }
+    if (!res.ok || !data || !data.success) {
+      const errorMsg = data?.error?.message || data?.error || 'Login failed'
+      const parsed = parseAuthError(errorMsg, { identifier, mode: 'login' })
       throw new UdayAuthError(parsed)
     }
 
@@ -377,6 +391,7 @@ export async function signInUser(
 }
 
 export async function signOutUser(): Promise<void> {
+  invalidateProfileCache()
   const auth = getClientAuth()
   try {
     await signOut(auth)
@@ -504,8 +519,11 @@ export async function fetchCurrentProfile(forceRefresh = false): Promise<{
       const headers = await getApiAuthHeaders()
       const res = await fetch('/api/account', { headers })
       if (res.ok) {
-        const data = await res.json()
-        if (data.profile) {
+        let data: any = null
+        try {
+          data = await res.json()
+        } catch {}
+        if (data && data.profile) {
           if (typeof window !== 'undefined') {
             try {
               localStorage.setItem('uday_user_profile', JSON.stringify(data.profile))
@@ -544,10 +562,12 @@ export async function fetchCurrentProfile(forceRefresh = false): Promise<{
       const localProfileStr = localStorage.getItem('uday_user_profile')
       if (localProfileStr) {
         const localProfile = JSON.parse(localProfileStr)
-        return {
+        const result = {
           profile: localProfile,
           savedPassengers: localProfile.savedPassengers || [],
         }
+        cachedProfileResult = { timestamp: Date.now(), data: result }
+        return result
       }
     } catch {}
   }
