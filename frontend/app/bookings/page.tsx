@@ -26,7 +26,6 @@ import {
 import { getApiAuthHeaders } from '@/lib/firebase/client'
 import { subscribeToAuth } from '@/lib/auth/client-auth'
 import { CancellationModal } from '@/components/cancellation/CancellationModal'
-import { mockTicket } from '@/lib/mock-tickets'
 
 export default function BookingsPage() {
   const [tickets, setTickets] = useState<any[]>([])
@@ -104,7 +103,7 @@ export default function BookingsPage() {
         }
       }
     } catch {}
-    setTickets([mockTicket])
+    setTickets([])
     setLoading(false)
   }
 

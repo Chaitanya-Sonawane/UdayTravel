@@ -356,6 +356,14 @@ export default function BookingSummaryPage() {
           ondismiss: () => {
             dispatch({ type: 'DISMISS' })
             setStatusMessage('Payment cancelled. Your seats are still held.')
+            // Release temporary wallet hold so balance is immediately available
+            getApiAuthHeaders().then((headers) => {
+              fetch('/api/wallet/release-hold', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ grp: currentGrp }),
+              }).catch(() => {})
+            })
           },
         },
         onPaymentFailed: (errRes) => {
@@ -363,6 +371,13 @@ export default function BookingSummaryPage() {
           const errorMsg =
             errRes.error?.description || 'Payment transaction was declined or failed.'
           setStatusMessage(errorMsg)
+          getApiAuthHeaders().then((headers) => {
+            fetch('/api/wallet/release-hold', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({ grp: currentGrp }),
+            }).catch(() => {})
+          })
         },
         handler: async (response) => {
           dispatch({ type: 'VERIFY' })

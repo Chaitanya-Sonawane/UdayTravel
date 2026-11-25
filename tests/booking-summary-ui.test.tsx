@@ -201,6 +201,6 @@ describe('Booking Summary Page UI/UX Consistency', () => {
     expect(html).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=Sangamwadi%2C%20Pune"')
     expect(html).toContain('href="https://www.google.com/maps/search/?api=1&amp;query=Ekvira%20Chowk%2C%20Ahilyanagar"')
     expect(html).toContain('View Map')
-    expect(html).toContain('Drop Location')
+    expect(html).toContain('Drop:')
   })
 })

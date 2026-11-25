@@ -1,0 +1,50 @@
+export const runtime = 'nodejs'
+import { NextResponse } from 'next/server'
+import { requireUser } from '@/lib/server/guard'
+import { TicketsRepository } from '@/lib/data/tickets.repo'
+import { OrdersRepository } from '@/lib/data/orders.repo'
+import { AppError } from '@/lib/errors/app-error'
+
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url)
+  const ticketNo = searchParams.get('ticketNo')
+  const grp = searchParams.get('grp')
+
+  // If specific ticket search requested
+  if (ticketNo) {
+    const cleanTicket = ticketNo.trim().toUpperCase()
+    const ticket = await TicketsRepository.getTicket(cleanTicket)
+    if (!ticket) {
+      return NextResponse.json({ tickets: [] }, { status: 200 })
+    }
+    return NextResponse.json({ tickets: [ticket] }, { status: 200 })
+  }
+
+  // If group ID query requested (e.g. from checkout return)
+  if (grp) {
+    const order = await OrdersRepository.getOrder(grp)
+    if (order?.ticketNo) {
+      const ticket = await TicketsRepository.getTicket(order.ticketNo)
+      if (ticket) {
+        return NextResponse.json({ tickets: [ticket] }, { status: 200 })
+      }
+    }
+    const ticketByGrp = await TicketsRepository.getTicketByGrp(grp)
+    if (ticketByGrp) {
+      return NextResponse.json({ tickets: [ticketByGrp] }, { status: 200 })
+    }
+  }
+
+  // Otherwise, require authenticated user to list their bookings
+  const auth = await requireUser(req)
+  if (!auth.success) {
+    return auth.response
+  }
+
+  try {
+    const tickets = await TicketsRepository.listUserTickets(auth.uid)
+    return NextResponse.json({ tickets }, { status: 200 })
+  } catch (err: unknown) {
+    return AppError.fromUnknown(err).toResponse()
+  }
+}

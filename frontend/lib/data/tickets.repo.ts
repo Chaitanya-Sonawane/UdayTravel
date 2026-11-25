@@ -32,6 +32,20 @@ export class TicketsRepository {
     return snap.data() as TicketDoc
   }
 
+  static async getTicketByGrp(grp: string): Promise<TicketDoc | null> {
+    firestoreMeter.recordRead('tickets', `grp_${grp}`)
+    const db = getAdminDb()
+    const snap = await db.collection('tickets').get()
+    let found: TicketDoc | null = null
+    snap.forEach((doc) => {
+      const data = doc.data() as TicketDoc
+      if (data.grp === grp) {
+        found = data
+      }
+    })
+    return found
+  }
+
   static async getTicketInTx(
     t: FirebaseFirestore.Transaction,
     ticketNo: string

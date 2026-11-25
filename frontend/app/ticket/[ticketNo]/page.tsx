@@ -88,6 +88,10 @@ export default function TicketPage() {
   }
 
   useEffect(() => {
+    let active = true
+    let retries = 0
+    const maxRetries = 4
+
     async function fetchLiveTicket() {
       if (!ticketNo) return
       try {
@@ -95,15 +99,30 @@ export default function TicketPage() {
         const res = await fetch(`/api/tickets/${ticketNo}`, { headers })
         if (res.ok) {
           const liveData = await res.json()
-          setTicket(liveData)
+          if (active && liveData) {
+            setTicket(liveData)
+            setLoading(false)
+            return
+          }
         }
       } catch {
         // Safe catch for live ticket fetch
-      } finally {
+      }
+
+      if (active && retries < maxRetries) {
+        retries++
+        setTimeout(fetchLiveTicket, 700 * retries)
+        return
+      }
+
+      if (active) {
         setLoading(false)
       }
     }
     fetchLiveTicket()
+    return () => {
+      active = false
+    }
   }, [ticketNo])
 
   if (!ticket && !loading) {

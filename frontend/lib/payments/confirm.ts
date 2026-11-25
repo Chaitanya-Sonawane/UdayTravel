@@ -154,6 +154,10 @@ export async function confirmBooking(
 
       for (const seatId of order.seatIds) {
         const seat = busSeatsData[seatId]
+        // If seat was already marked confirmed for this order/ticket, allow idempotent continuation
+        if (seat && seat.state === 'CONFIRMED' && (seat.grp === grp || seat.ticketNo === existingOrder.ticketNo)) {
+          continue
+        }
         if (!seat || seat.state !== 'HELD' || seat.grp !== grp) {
           throw new AppError(
             ErrorCodes.SEAT_OWNERSHIP_FAILED,
