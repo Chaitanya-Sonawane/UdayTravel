@@ -53,7 +53,14 @@ export class TicketsRepository {
     const db = getAdminDb()
     const snap = await db.collection('tickets').doc(ticketNo).get()
     if (!snap.exists) return null
-    return snap.data() as TicketDoc
+    const data = snap.data() as TicketDoc
+    if (data) {
+      const s = String(data.status || '').trim().toUpperCase()
+      if (s === 'CANCELLED' || s === 'CANCELED' || Boolean(data.cancelledAt)) {
+        data.status = 'CANCELLED'
+      }
+    }
+    return data
   }
 
   static async getTicketByGrp(grp: string): Promise<TicketDoc | null> {
@@ -64,6 +71,10 @@ export class TicketsRepository {
     snap.forEach((doc) => {
       const data = doc.data() as TicketDoc
       if (data.grp === grp) {
+        const s = String(data.status || '').trim().toUpperCase()
+        if (s === 'CANCELLED' || s === 'CANCELED' || Boolean(data.cancelledAt)) {
+          data.status = 'CANCELLED'
+        }
         found = data
       }
     })
@@ -102,6 +113,10 @@ export class TicketsRepository {
     snap.forEach((doc) => {
       const data = doc.data() as TicketDoc
       if (data.uid === uid) {
+        const s = String(data.status || '').trim().toUpperCase()
+        if (s === 'CANCELLED' || s === 'CANCELED' || Boolean(data.cancelledAt)) {
+          data.status = 'CANCELLED'
+        }
         list.push(data)
       }
     })
@@ -180,6 +195,10 @@ export class TicketsRepository {
 
     snap.forEach((doc) => {
       const data = doc.data() as TicketDoc
+      const s = String(data.status || '').trim().toUpperCase()
+      if (s === 'CANCELLED' || s === 'CANCELED' || Boolean(data.cancelledAt)) {
+        data.status = 'CANCELLED'
+      }
       if (options?.date && options.date !== 'ALL' && data.travelDate !== options.date) {
         return
       }
@@ -231,6 +250,10 @@ export class TicketsRepository {
         p.name?.toUpperCase().includes(cleanQ)
       )
       if (matchesTicket || matchesPhone || matchesPassenger) {
+        const s = String(data.status || '').trim().toUpperCase()
+        if (s === 'CANCELLED' || s === 'CANCELED' || Boolean(data.cancelledAt)) {
+          data.status = 'CANCELLED'
+        }
         list.push(data)
       }
     })

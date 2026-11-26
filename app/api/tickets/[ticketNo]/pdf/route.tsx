@@ -63,10 +63,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
   },
+  statusBadgeCancelled: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
   statusText: {
     fontSize: 7.5,
     fontFamily: 'Helvetica-Bold',
     color: '#059669',
+    letterSpacing: 1.2,
+  },
+  statusTextCancelled: {
+    fontSize: 7.5,
+    fontFamily: 'Helvetica-Bold',
+    color: '#DC2626',
     letterSpacing: 1.2,
   },
   ticketNumberLabel: {
@@ -455,9 +469,12 @@ function normalizeTicketData(ticketDoc: TicketDoc | MockTicket | any): Normalize
       ? ticketDoc.fare.totalPaise / 100
       : ticketDoc.fare?.total || perSeatRupees * (ticketDoc.passengers?.length || 1)
 
+  const s = String(ticketDoc.status || '').trim().toUpperCase()
+  const isCancelled = s === 'CANCELLED' || s === 'CANCELED' || Boolean(ticketDoc.cancelledAt)
+
   return {
     ticketNo: ticketDoc.ticketNo,
-    status: ticketDoc.status || 'CONFIRMED',
+    status: isCancelled ? 'CANCELLED' : ticketDoc.status || 'CONFIRMED',
     route: {
       from: ticketDoc.route?.from || 'Ahilyanagar',
       to: ticketDoc.route?.to || 'Pune',
@@ -553,8 +570,10 @@ export async function GET(
             </View>
           </View>
           <View style={styles.headerRight}>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{ticket.status}</Text>
+            <View style={ticket.status === 'CANCELLED' ? styles.statusBadgeCancelled : styles.statusBadge}>
+              <Text style={ticket.status === 'CANCELLED' ? styles.statusTextCancelled : styles.statusText}>
+                {ticket.status}
+              </Text>
             </View>
             <Text style={styles.ticketNumberLabel}>TICKET NUMBER</Text>
             <Text style={styles.ticketNumberValue}>{ticket.ticketNo}</Text>

@@ -27,6 +27,39 @@ import { getApiAuthHeaders } from '@/lib/firebase/client'
 import { subscribeToAuth } from '@/lib/auth/client-auth'
 import { CancellationModal } from '@/components/cancellation/CancellationModal'
 
+function isTicketCancelled(t: any): boolean {
+  if (!t) return false
+  const s = String(t.status || '').trim().toUpperCase()
+  if (
+    s === 'CANCELLED' ||
+    s === 'CANCELED' ||
+    s === 'REFUND_INITIATED' ||
+    s === 'REFUNDED'
+  ) {
+    return true
+  }
+  if (t.cancelledAt || t.cancellationReason || t.cancellationSource) {
+    return true
+  }
+  if (typeof window !== 'undefined' && t.ticketNo) {
+    try {
+      const local = localStorage.getItem(`uday_ticket_${t.ticketNo}`)
+      if (local) {
+        const parsed = JSON.parse(local)
+        const ls = String(parsed.status || '').trim().toUpperCase()
+        if (ls === 'CANCELLED' || ls === 'CANCELED' || parsed.cancelledAt) {
+          return true
+        }
+      }
+      const cancelledList = JSON.parse(localStorage.getItem('uday_cancelled_tickets') || '[]')
+      if (Array.isArray(cancelledList) && cancelledList.includes(t.ticketNo)) {
+        return true
+      }
+    } catch {}
+  }
+  return false
+}
+
 export default function BookingsPage() {
   const [tickets, setTickets] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -41,26 +74,47 @@ export default function BookingsPage() {
     return () => clearInterval(timer)
   }, [])
 
-  // Load user's bookings from API
+  // Load user's bookings from API and reconcile with local storage
   useEffect(() => {
     const unsub = subscribeToAuth(async (user) => {
       setLoading(true)
+      let fetchedTickets: any[] = []
       try {
         const headers = await getApiAuthHeaders()
         const res = await fetch('/api/bookings', { headers })
         if (res.ok) {
           const data = await res.json()
           if (Array.isArray(data.tickets)) {
-            setTickets(data.tickets)
-            setLoading(false)
-            return
+            fetchedTickets = data.tickets
           }
         }
       } catch {
         // Safe catch for bookings fetch
       }
 
-      setTickets([])
+      // Merge with localStorage tickets for guest/anonymous or offline persistence
+      if (typeof window !== 'undefined') {
+        try {
+          const myTickets = JSON.parse(localStorage.getItem('uday_my_tickets') || '[]')
+          if (Array.isArray(myTickets)) {
+            for (const localT of myTickets) {
+              if (localT?.ticketNo && !fetchedTickets.some((ft) => ft.ticketNo === localT.ticketNo)) {
+                fetchedTickets.push(localT)
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // Reconcile cancellation status for each ticket
+      const reconciled = fetchedTickets.map((item) => {
+        if (isTicketCancelled(item)) {
+          return { ...item, status: 'CANCELLED' }
+        }
+        return item
+      })
+
+      setTickets(reconciled)
       setLoading(false)
     })
 
@@ -72,17 +126,50 @@ export default function BookingsPage() {
     e.preventDefault()
     if (!searchQuery.trim()) return
     setLoading(true)
+    const cleanTicket = searchQuery.trim().toUpperCase()
     try {
-      const res = await fetch(`/api/bookings?ticketNo=${encodeURIComponent(searchQuery.trim())}`)
+      const res = await fetch(`/api/bookings?ticketNo=${encodeURIComponent(cleanTicket)}`)
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data.tickets) && data.tickets.length > 0) {
-          setTickets(data.tickets)
+          const reconciled = data.tickets.map((item: any) => {
+            if (isTicketCancelled(item)) {
+              return { ...item, status: 'CANCELLED' }
+            }
+            return item
+          })
+          setTickets(reconciled)
           setLoading(false)
           return
         }
       }
     } catch {}
+
+    // Fallback: check localStorage for this ticket!
+    if (typeof window !== 'undefined') {
+      try {
+        const local = localStorage.getItem(`uday_ticket_${cleanTicket}`)
+        if (local) {
+          const parsed = JSON.parse(local)
+          if (isTicketCancelled(parsed)) {
+            parsed.status = 'CANCELLED'
+          }
+          setTickets([parsed])
+          setLoading(false)
+          return
+        }
+        const myTickets = JSON.parse(localStorage.getItem('uday_my_tickets') || '[]')
+        const match = myTickets.find((x: any) => x.ticketNo?.toUpperCase() === cleanTicket)
+        if (match) {
+          if (isTicketCancelled(match)) {
+            match.status = 'CANCELLED'
+          }
+          setTickets([match])
+          setLoading(false)
+          return
+        }
+      } catch {}
+    }
 
     setTickets([])
     setLoading(false)
@@ -91,19 +178,39 @@ export default function BookingsPage() {
   const handleResetSearch = async () => {
     setSearchQuery('')
     setLoading(true)
+    let fetchedTickets: any[] = []
     try {
       const headers = await getApiAuthHeaders()
       const res = await fetch('/api/bookings', { headers })
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data.tickets) && data.tickets.length > 0) {
-          setTickets(data.tickets)
-          setLoading(false)
-          return
+          fetchedTickets = data.tickets
         }
       }
     } catch {}
-    setTickets([])
+
+    if (typeof window !== 'undefined') {
+      try {
+        const myTickets = JSON.parse(localStorage.getItem('uday_my_tickets') || '[]')
+        if (Array.isArray(myTickets)) {
+          for (const localT of myTickets) {
+            if (localT?.ticketNo && !fetchedTickets.some((ft) => ft.ticketNo === localT.ticketNo)) {
+              fetchedTickets.push(localT)
+            }
+          }
+        }
+      } catch {}
+    }
+
+    const reconciled = fetchedTickets.map((item) => {
+      if (isTicketCancelled(item)) {
+        return { ...item, status: 'CANCELLED' }
+      }
+      return item
+    })
+
+    setTickets(reconciled)
     setLoading(false)
   }
 
@@ -244,7 +351,7 @@ export default function BookingsPage() {
         {/* List of Upgraded Ticket Cards */}
         {!loading &&
           tickets.map((t: any) => {
-            const isCancelled = t.status === 'CANCELLED'
+            const isCancelled = isTicketCancelled(t)
             const dateWithDay = formatDateWithDay(t.travelDate)
             const depTimeRaw = t.pickup?.pickupTime || t.pickup?.time || '06:00'
             const depTime12h = formatTime12h(depTimeRaw, t.travelDate)
@@ -255,7 +362,7 @@ export default function BookingsPage() {
               departureTime: depTimeRaw,
               now,
             })
-            const canCancelTicket = !isCancelled && t.status === 'CONFIRMED' && !tl.isClosed
+            const canCancelTicket = !isCancelled && String(t.status || '').trim().toUpperCase() === 'CONFIRMED' && !tl.isClosed
 
             const totalPaise = t.fare?.totalPaise || (t.fare?.total ? t.fare.total * 100 : 20000)
             const totalFormatted = `₹${(totalPaise / 100).toFixed(2)}`
@@ -270,12 +377,18 @@ export default function BookingsPage() {
                 {/* Header status & PNR with Copy */}
                 <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-3">
                   {isCancelled ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-black tracking-wide">
-                      <XCircle size={14} className="text-red-600" /> CANCELLED
+                    <span
+                      data-testid={`status-badge-${t.ticketNo}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 text-xs font-black tracking-wide shadow-2xs"
+                    >
+                      <XCircle size={14} className="text-red-600 stroke-[2.5]" /> CANCELLED
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-black tracking-wide">
-                      <CheckCircle2 size={14} className="text-emerald-600" /> CONFIRMED
+                    <span
+                      data-testid={`status-badge-${t.ticketNo}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-black tracking-wide shadow-2xs"
+                    >
+                      <CheckCircle2 size={14} className="text-emerald-600 stroke-[2.5]" /> CONFIRMED
                     </span>
                   )}
 

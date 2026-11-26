@@ -15,6 +15,7 @@ import {
   Home,
   Users,
   XCircle,
+  CheckCircle2,
   Loader2,
   AlertCircle,
   Wallet,
@@ -31,6 +32,39 @@ import { CancellationModal } from '@/components/cancellation/CancellationModal'
 import { subscribeToAuth, signOutUser, fetchCurrentProfile } from '@/lib/auth/client-auth'
 import { User } from 'firebase/auth'
 import NavDrawer from '@/components/navigation/NavDrawer'
+
+function isTicketCancelled(t: any): boolean {
+  if (!t) return false
+  const s = String(t.status || '').trim().toUpperCase()
+  if (
+    s === 'CANCELLED' ||
+    s === 'CANCELED' ||
+    s === 'REFUND_INITIATED' ||
+    s === 'REFUNDED'
+  ) {
+    return true
+  }
+  if (t.cancelledAt || t.cancellationReason || t.cancellationSource) {
+    return true
+  }
+  if (typeof window !== 'undefined' && t.ticketNo) {
+    try {
+      const local = localStorage.getItem(`uday_ticket_${t.ticketNo}`)
+      if (local) {
+        const parsed = JSON.parse(local)
+        const ls = String(parsed.status || '').trim().toUpperCase()
+        if (ls === 'CANCELLED' || ls === 'CANCELED' || parsed.cancelledAt) {
+          return true
+        }
+      }
+      const cancelledList = JSON.parse(localStorage.getItem('uday_cancelled_tickets') || '[]')
+      if (Array.isArray(cancelledList) && cancelledList.includes(t.ticketNo)) {
+        return true
+      }
+    } catch {}
+  }
+  return false
+}
 
 const money = (value: number) => `₹${value}`
 const date = (value: string) => {
@@ -96,6 +130,23 @@ export default function TicketPage() {
     setSheet(false)
   }
 
+  // Immediate localStorage hydration
+  useEffect(() => {
+    if (typeof window !== 'undefined' && ticketNo) {
+      try {
+        const cached = localStorage.getItem(`uday_ticket_${ticketNo}`)
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (isTicketCancelled(parsed)) {
+            parsed.status = 'CANCELLED'
+          }
+          setTicket(parsed)
+          setLoading(false)
+        }
+      } catch {}
+    }
+  }, [ticketNo])
+
   useEffect(() => {
     let active = true
     let retries = 0
@@ -109,6 +160,9 @@ export default function TicketPage() {
         if (res.ok) {
           const liveData = await res.json()
           if (active && liveData) {
+            if (isTicketCancelled(liveData)) {
+              liveData.status = 'CANCELLED'
+            }
             setTicket(liveData)
             if (typeof window !== 'undefined') {
               try {
@@ -130,6 +184,28 @@ export default function TicketPage() {
       }
 
       if (active) {
+        if (typeof window !== 'undefined') {
+          try {
+            const cached = localStorage.getItem(`uday_ticket_${ticketNo}`)
+            if (cached) {
+              const parsed = JSON.parse(cached)
+              if (isTicketCancelled(parsed)) parsed.status = 'CANCELLED'
+              setTicket(parsed)
+              setLoading(false)
+              return
+            }
+            const myTickets = JSON.parse(localStorage.getItem('uday_my_tickets') || '[]')
+            const match = myTickets.find(
+              (x: any) => String(x.ticketNo || '').toUpperCase() === String(ticketNo || '').toUpperCase()
+            )
+            if (match) {
+              if (isTicketCancelled(match)) match.status = 'CANCELLED'
+              setTicket(match)
+              setLoading(false)
+              return
+            }
+          } catch {}
+        }
         setLoading(false)
       }
     }
@@ -193,7 +269,7 @@ export default function TicketPage() {
       ? ticket.fare.totalPaise / 100
       : ticket.fare?.total || perSeatRupees * (ticket.passengers?.length || 1)
 
-  const isCancelled = ticket.status === 'CANCELLED'
+  const isCancelled = isTicketCancelled(ticket)
   const pickupTime = ticket.pickup?.time || ticket.pickup?.pickupTime || '06:30'
   const dropTime = ticket.drop?.time || '09:30'
 
@@ -290,9 +366,20 @@ export default function TicketPage() {
                 {/* Golden Yellow PNR Banner */}
                 <div className="bg-[#F8B018] px-5 py-3.5 text-white flex items-center justify-between gap-3">
                   <div>
-                    <span className="block text-[11px] font-extrabold tracking-wider uppercase text-amber-950/80">
-                      TICKET NO. (PNR)
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="block text-[11px] font-extrabold tracking-wider uppercase text-amber-950/80">
+                        TICKET NO. (PNR)
+                      </span>
+                      {isCancelled ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white tracking-wider uppercase inline-flex items-center gap-1 shadow-xs">
+                          <XCircle size={11} className="stroke-[2.5]" /> CANCELLED
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-700 text-white tracking-wider uppercase inline-flex items-center gap-1 shadow-xs">
+                          <CheckCircle2 size={11} className="stroke-[2.5]" /> CONFIRMED
+                        </span>
+                      )}
+                    </div>
                     <strong
                       id="ticket-title"
                       className="block text-2xl sm:text-3xl font-black tracking-wide font-mono text-white mt-0.5"
@@ -337,15 +424,32 @@ export default function TicketPage() {
             <div className="p-5 space-y-5">
               {/* Route & Coach Overview */}
               <div>
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2 text-xl sm:text-2xl font-black text-gray-950">
                     <span>{ticket.route?.from}</span>
                     <span className="text-[#F8B018]">➔</span>
                     <span>{ticket.route?.to}</span>
                   </div>
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap">
-                    {ticket.seatLayout || '3+2 Seater'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {isCancelled ? (
+                      <span
+                        data-testid="ticket-status-badge"
+                        className="px-2.5 py-1 rounded-full text-xs font-black bg-red-50 text-red-700 border border-red-200 whitespace-nowrap inline-flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <XCircle size={13} className="text-red-600 stroke-[2.5]" /> CANCELLED
+                      </span>
+                    ) : (
+                      <span
+                        data-testid="ticket-status-badge"
+                        className="px-2.5 py-1 rounded-full text-xs font-black bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap inline-flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <CheckCircle2 size={13} className="text-emerald-600 stroke-[2.5]" /> CONFIRMED
+                      </span>
+                    )}
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 whitespace-nowrap">
+                      {ticket.seatLayout || '3+2 Seater'}
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 font-medium">
@@ -684,7 +788,11 @@ export default function TicketPage() {
           initialTicket={ticket}
           onClose={() => setCancelModal(false)}
           onSuccess={(res) => {
-            if (res.ticket) setTicket(res.ticket)
+            if (res?.ticket) {
+              setTicket({ ...res.ticket, status: 'CANCELLED' })
+            } else {
+              setTicket((prev: any) => ({ ...prev, status: 'CANCELLED', cancelledAt: new Date().toISOString() }))
+            }
             setCancelModal(false)
           }}
         />

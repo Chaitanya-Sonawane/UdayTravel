@@ -28,6 +28,14 @@ export async function GET(
       }
     }
 
+    // Fallback 1b: Search by query if direct get didn't match (case-insensitive or partial)
+    if (!ticket) {
+      const searchResults = await TicketsRepository.searchTickets(ticketNo)
+      if (searchResults.length > 0 && searchResults[0]) {
+        ticket = searchResults[0]
+      }
+    }
+
     // Fallback 2: Check test fixture whitelist
     if (!ticket) {
       ticket = getTicket(ticketNo) as any

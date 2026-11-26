@@ -229,8 +229,30 @@ export function CancellationModal({
 
       if (typeof window !== 'undefined') {
         try {
-          const updated = { ...ticket, status: 'CANCELLED' }
+          const updated = {
+            ...ticket,
+            status: 'CANCELLED',
+            cancelledAt: new Date().toISOString(),
+          }
           localStorage.setItem(`uday_ticket_${ticket.ticketNo}`, JSON.stringify(updated))
+
+          // Update uday_my_tickets
+          const myTickets = JSON.parse(localStorage.getItem('uday_my_tickets') || '[]')
+          if (Array.isArray(myTickets)) {
+            const updatedList = myTickets.map((t: any) =>
+              t.ticketNo === ticket.ticketNo
+                ? { ...t, status: 'CANCELLED', cancelledAt: new Date().toISOString() }
+                : t
+            )
+            localStorage.setItem('uday_my_tickets', JSON.stringify(updatedList))
+          }
+
+          // Record in uday_cancelled_tickets
+          const cancelledList = JSON.parse(localStorage.getItem('uday_cancelled_tickets') || '[]')
+          if (!cancelledList.includes(ticket.ticketNo)) {
+            cancelledList.push(ticket.ticketNo)
+            localStorage.setItem('uday_cancelled_tickets', JSON.stringify(cancelledList))
+          }
         } catch {}
       }
 

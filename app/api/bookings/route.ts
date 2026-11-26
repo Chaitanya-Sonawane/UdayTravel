@@ -13,8 +13,12 @@ export async function GET(req: Request) {
   // If specific ticket search requested
   if (ticketNo) {
     const cleanTicket = ticketNo.trim().toUpperCase()
-    const ticket = await TicketsRepository.getTicket(cleanTicket)
+    let ticket = await TicketsRepository.getTicket(cleanTicket)
     if (!ticket) {
+      const searchResults = await TicketsRepository.searchTickets(cleanTicket)
+      if (searchResults.length > 0) {
+        return NextResponse.json({ tickets: searchResults }, { status: 200 })
+      }
       return NextResponse.json({ tickets: [] }, { status: 200 })
     }
     return NextResponse.json({ tickets: [ticket] }, { status: 200 })

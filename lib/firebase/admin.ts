@@ -83,7 +83,6 @@ function saveDevStore(store: Map<string, any>) {
   for (const p of getDevStoragePaths()) {
     try {
       fs.writeFileSync(p, serialized, 'utf-8')
-      break
     } catch {
       // try next path if readonly
     }
