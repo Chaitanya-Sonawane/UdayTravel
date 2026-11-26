@@ -21,11 +21,11 @@ export default function AlternatingInfoSection() {
             <div className="md:col-span-6 space-y-6">
               {/* Big Header inside text column */}
               <h2
-                className="font-chakra font-black uppercase text-4xl sm:text-5xl md:text-6xl lg:text-[62px] xl:text-[70px] leading-[0.88] tracking-[-0.03em] text-left"
+                className="font-chakra font-black uppercase text-3xl sm:text-4xl md:text-5xl lg:text-[52px] xl:text-[58px] leading-[1.08] tracking-[-0.03em] text-left"
                 style={{ fontFamily: "'Chakra Petch', sans-serif" }}
               >
-                <span className="text-[#8E9BAE] block">ABOUT</span>
-                <span className="text-[#0B0F19] block">UDAY TRAVELS</span>
+                <span className="text-[#8E9BAE] mr-2.5 sm:mr-3.5 inline">ABOUT</span>
+                <span className="text-[#0B0F19] inline">UDAY TRAVELS</span>
               </h2>
 
               <div className="text-gray-700 text-sm sm:text-base lg:text-[17px] leading-relaxed space-y-4 font-normal">
@@ -95,12 +95,11 @@ export default function AlternatingInfoSection() {
             <div className="md:col-span-6 order-1 md:order-2 space-y-6">
               {/* Big Header inside text column */}
               <h2
-                className="font-chakra font-black uppercase text-4xl sm:text-5xl md:text-6xl lg:text-[62px] xl:text-[70px] leading-[0.88] tracking-[-0.03em] text-left"
+                className="font-chakra font-black uppercase text-2xl sm:text-3xl md:text-4xl lg:text-[44px] xl:text-[50px] leading-[1.08] tracking-[-0.03em] text-left"
                 style={{ fontFamily: "'Chakra Petch', sans-serif" }}
               >
-                <span className="text-[#8E9BAE] block">DEDICATED</span>
-                <span className="text-[#0B0F19] block">TRAVELLER</span>
-                <span className="text-[#0B0F19] block">SUPPORT</span>
+                <span className="text-[#8E9BAE] mr-2.5 sm:mr-3.5 inline">DEDICATED</span>
+                <span className="text-[#0B0F19] inline">TRAVELLER SUPPORT</span>
               </h2>
 
               <div className="text-gray-700 text-sm sm:text-base lg:text-[17px] leading-relaxed space-y-4 font-normal">
@@ -161,12 +160,11 @@ export default function AlternatingInfoSection() {
             <div className="md:col-span-6 space-y-6">
               {/* Big Header inside text column */}
               <h2
-                className="font-chakra font-black uppercase text-3xl sm:text-4xl md:text-5xl lg:text-[58px] xl:text-[66px] leading-[0.88] tracking-[-0.03em] text-left"
+                className="font-chakra font-black uppercase text-2xl sm:text-3xl md:text-4xl lg:text-[40px] xl:text-[46px] leading-[1.08] tracking-[-0.03em] text-left"
                 style={{ fontFamily: "'Chakra Petch', sans-serif" }}
               >
-                <span className="text-[#8E9BAE] block">FAIR TRAVEL &amp;</span>
-                <span className="text-[#0B0F19] block">CANCELLATION</span>
-                <span className="text-[#0B0F19] block">POLICY</span>
+                <span className="text-[#8E9BAE] mr-2.5 sm:mr-3.5 inline">FAIR TRAVEL &amp;</span>
+                <span className="text-[#0B0F19] inline">CANCELLATION POLICY</span>
               </h2>
 
               <div className="text-gray-700 text-sm sm:text-base lg:text-[17px] leading-relaxed space-y-4 font-normal">
@@ -236,12 +234,11 @@ export default function AlternatingInfoSection() {
             <div className="md:col-span-6 order-1 md:order-2 space-y-6">
               {/* Big Header inside text column */}
               <h2
-                className="font-chakra font-black uppercase text-3xl sm:text-4xl md:text-5xl lg:text-[58px] xl:text-[66px] leading-[0.88] tracking-[-0.03em] text-left"
+                className="font-chakra font-black uppercase text-2xl sm:text-3xl md:text-4xl lg:text-[42px] xl:text-[48px] leading-[1.08] tracking-[-0.03em] text-left"
                 style={{ fontFamily: "'Chakra Petch', sans-serif" }}
               >
-                <span className="text-[#8E9BAE] block">GET IN TOUCH</span>
-                <span className="text-[#0B0F19] block">WITH UDAY</span>
-                <span className="text-[#0B0F19] block">TRAVELS</span>
+                <span className="text-[#8E9BAE] mr-2.5 sm:mr-3.5 inline">GET IN TOUCH</span>
+                <span className="text-[#0B0F19] inline">WITH UDAY TRAVELS</span>
               </h2>
 
               <p className="text-gray-700 text-sm sm:text-base lg:text-[17px] leading-relaxed font-normal">
