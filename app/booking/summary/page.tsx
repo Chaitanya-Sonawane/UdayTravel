@@ -488,36 +488,42 @@ export default function BookingSummaryPage() {
         ))}
       </nav>
 
-      {/* Cityscape Hero Banner with BOOKING SUMMARY & Hold Timer matching Choose Your Journey */}
-      <section className="seats-hero availability-hero" aria-label="Booking Summary Hero">
+      {/* Cityscape Hero Banner with CHOOSE YOUR JOURNEY matching Availability Page */}
+      <section className="seats-hero availability-hero relative" aria-label="Booking Summary Hero">
         <div className="seats-hero-overlay availability-hero-overlay" />
         <div className="availability-hero-copy">
-          <div className="flex items-end justify-between flex-wrap gap-4">
-            <div>
-              <h1>
-                BOOKING<br />
-                <span>SUMMARY.</span>
-              </h1>
-              <p className="text-xs sm:text-sm font-semibold text-white/95 drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] mt-2 mb-0 font-jakarta">
-                {journey?.from || 'Ahilyanagar'} to {journey?.to || 'Pune'} · {tripDate} · {journey?.busName || 'Express Coach'}
-              </p>
-            </div>
+          <h1>
+            CHOOSE YOUR
+            <br />
+            <span>JOURNEY.</span>
+          </h1>
+          <span className="sr-only">BOOKING SUMMARY.</span>
+        </div>
 
-            <div
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-gray-950 bg-[#F8B018] px-4 py-2 rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.45)] border border-yellow-300 shrink-0 font-jakarta"
-              role="timer"
-              aria-live="polite"
-              aria-label={`Hold expires in ${formattedHoldTime}`}
-            >
-              <Clock size={14} className="text-gray-950 stroke-[2.5]" />
-              <span>Hold expires in {formattedHoldTime}</span>
-            </div>
-          </div>
+        {/* Hold Timer Pill positioned cleanly in the hero banner without displacing h1 */}
+        <div
+          className="absolute right-4 sm:right-6 top-6 sm:top-8 z-10 inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-gray-950 bg-[#F8B018] px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.45)] border border-yellow-300 shrink-0 font-jakarta"
+          role="timer"
+          aria-live="polite"
+          aria-label={`Hold expires in ${formattedHoldTime}`}
+        >
+          <Clock size={14} className="text-gray-950 stroke-[2.5]" />
+          <span>Hold expires in {formattedHoldTime}</span>
         </div>
       </section>
 
       {/* Booking Shell overlapping hero */}
       <section className="booking-shell -mt-6 sm:-mt-8 relative z-10 w-full max-w-[620px] lg:max-w-5xl mx-auto px-3 sm:px-4 lg:px-8 pb-16 flex-1">
+        {/* Route & Trip Subheading Pill / Info Bar */}
+        <div className="flex items-center justify-between mb-4 px-3.5 py-2 bg-white/95 backdrop-blur-xs rounded-xl border border-gray-200/90 shadow-2xs text-xs font-bold text-slate-800">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#F8B018]" />
+            <span className="tracking-wide uppercase font-mono">BOOKING SUMMARY</span>
+          </div>
+          <span className="text-slate-600 font-medium">
+            {journey?.from || 'Ahilyanagar'} → {journey?.to || 'Pune'} · {tripDate} · {journey?.busName || 'Express Coach'}
+          </span>
+        </div>
         {/* Status Notice Banner (if triggered) */}
         {statusMessage && (
           <div className="mb-4">

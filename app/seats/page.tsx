@@ -1218,26 +1218,24 @@ export default function SeatsPage() {
     <main className="account-page seats-flow">
       <BookingHeader onMenu={() => setSheet((prev) => !prev)} />
 
-      {/* Cityscape Hero Banner with CHOOSE YOUR SEATS & Hold Timer matching Choose Your Journey */}
-      <section className="seats-hero availability-hero" aria-label="Seat Selection Hero">
+      {/* Cityscape Hero Banner with CHOOSE YOUR JOURNEY matching Availability Page */}
+      <section className="seats-hero availability-hero relative" aria-label="Seat Selection Hero">
         <div className="seats-hero-overlay availability-hero-overlay" />
         <div className="availability-hero-copy">
-          <div className="flex items-end justify-between flex-wrap gap-4">
-            <div>
-              <h1>
-                CHOOSE YOUR<br />
-                <span>SEATS.</span>
-              </h1>
-            </div>
+          <h1>
+            CHOOSE YOUR
+            <br />
+            <span>JOURNEY.</span>
+          </h1>
+        </div>
 
-            <div className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-gray-950 bg-[#F8B018] px-4 py-2 rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.45)] border border-yellow-300 shrink-0">
-              <Clock size={14} className="text-gray-950 stroke-[2.5]" />
-              <span>
-                Hold expires in {Math.floor((holdTimerSeconds ?? 300) / 60)}:
-                {((holdTimerSeconds ?? 300) % 60).toString().padStart(2, '0')}
-              </span>
-            </div>
-          </div>
+        {/* Hold Timer Pill positioned cleanly in the hero banner without displacing h1 */}
+        <div className="absolute right-4 sm:right-6 top-6 sm:top-8 z-10 inline-flex items-center gap-1.5 text-xs sm:text-sm font-black text-gray-950 bg-[#F8B018] px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full shadow-[0_2px_12px_rgba(0,0,0,0.45)] border border-yellow-300 shrink-0">
+          <Clock size={14} className="text-gray-950 stroke-[2.5]" />
+          <span>
+            Hold expires in {Math.floor((holdTimerSeconds ?? 300) / 60)}:
+            {((holdTimerSeconds ?? 300) % 60).toString().padStart(2, '0')}
+          </span>
         </div>
       </section>
 
