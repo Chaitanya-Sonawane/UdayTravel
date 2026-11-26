@@ -35,6 +35,7 @@ import {
 } from '@/lib/domain/seats/bus-templates'
 import { DEFAULT_BUSES, BusDocument } from '@/lib/data/buses.constants'
 import { ThemedDatePickerModal } from '@/components/ui/ThemedDatePickerModal'
+import { AdminBusSeatGraphic } from './AdminBusSeatGraphic'
 
 type SeatState = 'available' | 'blocked' | 'female' | 'male'
 
@@ -156,6 +157,42 @@ export function DailyRouteBusScheduler({
       ...prev,
       [seatId]: prev[seatId] === activeTool ? 'available' : activeTool,
     }))
+  }
+
+  // Render individual seat graphic matching frontend
+  const renderSchedulerSeat = (sId: string) => {
+    const state = seatConfig[sId] || 'available'
+    const isBlocked = state === 'blocked'
+    const isFemale = state === 'female'
+    const isMale = state === 'male'
+
+    return (
+      <button
+        key={sId}
+        type="button"
+        onClick={() => handleSeatClick(sId)}
+        title={`Seat ${sId}: ${state} (Click to toggle tool: ${activeTool})`}
+        aria-label={`Seat ${sId} ${state}`}
+        className="group relative inline-flex items-center justify-center p-0 rounded-lg border-0 bg-transparent transition-all duration-150 hover:-translate-y-1 hover:scale-105 active:scale-95 cursor-pointer"
+      >
+        <AdminBusSeatGraphic
+          seatId={sId}
+          status={
+            isBlocked
+              ? 'blocked'
+              : isFemale
+              ? 'female'
+              : isMale
+              ? 'male'
+              : 'available'
+          }
+          gender={isFemale ? 'F' : isMale ? 'M' : undefined}
+          isBlocked={isBlocked}
+          width={34}
+          height={40}
+        />
+      </button>
+    )
   }
 
   // Quick bulk presets
@@ -616,108 +653,62 @@ export function DailyRouteBusScheduler({
             </div>
           </div>
 
-          {/* Interactive Bus Seat Layout Matrix */}
-          <div className="bg-gray-50 border border-gray-200 rounded-3xl p-6 max-w-lg mx-auto shadow-inner space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 text-xs">
-              <div className="flex items-center gap-2 font-extrabold text-gray-800 uppercase tracking-wider">
-                <Bus size={18} className="text-[#F8B018]" />
-                <span>Front / Driver Cabin</span>
+          {/* Interactive Bus Seat Layout Matrix matching frontend */}
+          <div className="flow-bus-shell flow-seat-map bg-white border-2 border-slate-300 rounded-[28px] p-5 max-w-[420px] mx-auto shadow-sm space-y-4">
+            <div className="flow-driver-cabin flex items-center justify-between pb-3 border-b-2 border-dashed border-slate-200 text-xs">
+              <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Front Entrance &rarr;</span>
               </div>
-              <span className="text-gray-400 font-mono text-[11px]">Door 🚪</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+                  Driver Cabin
+                </span>
+                <div
+                  className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-500 shadow-2xs"
+                  title="Driver's Steering Wheel"
+                >
+                  <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+                    <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
+                    <circle cx="16" cy="16" r="3.5" fill="currentColor" />
+                    <line x1="16" y1="3" x2="16" y2="12.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <line x1="6.8" y1="21.3" x2="13.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    <line x1="25.2" y1="21.3" x2="18.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  </svg>
+                </div>
+              </div>
             </div>
 
             {/* Front Cabin Seats if applicable */}
             {activeTemplate.frontSeats.length > 0 && (
-              <div className="flex items-center justify-end gap-2 pb-3 border-b border-gray-200/80">
-                <span className="text-[11px] text-gray-400 font-medium mr-2">Front Cabin:</span>
-                {activeTemplate.frontSeats.map((sId) => {
-                  const state = seatConfig[sId] || 'available'
-                  return (
-                    <button
-                      key={sId}
-                      type="button"
-                      onClick={() => handleSeatClick(sId)}
-                      className={`w-9 h-9 rounded-xl font-mono text-xs font-extrabold border flex items-center justify-center transition-transform hover:scale-105 ${
-                        state === 'blocked'
-                          ? 'bg-amber-100 border-amber-400 text-amber-900'
-                          : state === 'female'
-                          ? 'bg-pink-100 border-pink-400 text-pink-900'
-                          : state === 'male'
-                          ? 'bg-blue-100 border-blue-400 text-blue-900'
-                          : 'bg-white border-gray-300 text-gray-800 hover:border-[#F8B018]'
-                      }`}
-                      title={`Seat ${sId} (${state})`}
-                    >
-                      {sId}
-                    </button>
-                  )
-                })}
+              <div className="flex items-center justify-end gap-1.5 pb-2.5 border-b border-slate-100">
+                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase mr-1">Front Cabin:</span>
+                {activeTemplate.frontSeats.map((sId) => renderSchedulerSeat(sId))}
               </div>
             )}
 
-            {/* Rows A to I */}
+            {/* Rows */}
             <div className="space-y-2">
               {activeTemplate.rows.map((row) => (
-                <div key={row.rowLabel} className="flex items-center justify-between gap-2">
-                  <span className="w-5 text-center text-xs font-mono font-bold text-gray-400">
-                    {row.rowLabel}
-                  </span>
-
+                <div key={row.rowLabel} className="flex items-center justify-between gap-1 sm:gap-2">
                   {/* Left Side */}
-                  <div className="flex items-center gap-2">
-                    {row.leftSeats.map((sId) => {
-                      const state = seatConfig[sId] || 'available'
-                      return (
-                        <button
-                          key={sId}
-                          type="button"
-                          onClick={() => handleSeatClick(sId)}
-                          className={`w-9 h-9 rounded-xl font-mono text-xs font-extrabold border flex items-center justify-center transition-transform hover:scale-105 ${
-                            state === 'blocked'
-                              ? 'bg-amber-100 border-amber-400 text-amber-900'
-                              : state === 'female'
-                              ? 'bg-pink-100 border-pink-400 text-pink-900'
-                              : state === 'male'
-                              ? 'bg-blue-100 border-blue-400 text-blue-900'
-                              : 'bg-white border-gray-300 text-gray-800 hover:border-[#F8B018]'
-                          }`}
-                          title={`Seat ${sId} (${state})`}
-                        >
-                          {sId}
-                        </button>
-                      )
-                    })}
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    {row.leftSeats.map((sId) => renderSchedulerSeat(sId))}
                   </div>
 
                   {/* Center Aisle */}
-                  <div className="h-6 flex items-center justify-center text-gray-300 text-[9px] font-mono select-none px-1">
-                    |
+                  <div className="flex-1 flex items-center justify-center px-1">
+                    <div className="h-9 w-6 flex items-center justify-center relative">
+                      <span className="text-[10px] font-mono font-bold text-slate-300 select-none">
+                        {row.rowLabel}
+                      </span>
+                      <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 border-r border-dashed border-slate-200" />
+                    </div>
                   </div>
 
                   {/* Right Side */}
-                  <div className="flex items-center gap-2">
-                    {row.rightSeats.map((sId) => {
-                      const state = seatConfig[sId] || 'available'
-                      return (
-                        <button
-                          key={sId}
-                          type="button"
-                          onClick={() => handleSeatClick(sId)}
-                          className={`w-9 h-9 rounded-xl font-mono text-xs font-extrabold border flex items-center justify-center transition-transform hover:scale-105 ${
-                            state === 'blocked'
-                              ? 'bg-amber-100 border-amber-400 text-amber-900'
-                              : state === 'female'
-                              ? 'bg-pink-100 border-pink-400 text-pink-900'
-                              : state === 'male'
-                              ? 'bg-blue-100 border-blue-400 text-blue-900'
-                              : 'bg-white border-gray-300 text-gray-800 hover:border-[#F8B018]'
-                          }`}
-                          title={`Seat ${sId} (${state})`}
-                        >
-                          {sId}
-                        </button>
-                      )
-                    })}
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    {row.rightSeats.map((sId) => renderSchedulerSeat(sId))}
                   </div>
                 </div>
               ))}
@@ -725,33 +716,12 @@ export function DailyRouteBusScheduler({
 
             {/* Rear Bench */}
             {activeTemplate.rearBench.length > 0 && (
-              <div className="pt-3 border-t border-gray-200">
-                <span className="text-[10px] text-gray-400 uppercase font-bold block text-center mb-1.5">
+              <div className="pt-3 border-t-2 border-slate-200">
+                <span className="text-[10px] text-slate-400 uppercase font-bold block text-center mb-2 font-mono">
                   Rear Bench ({activeTemplate.rearBench.length} Seats)
                 </span>
-                <div className="flex items-center justify-center gap-1.5">
-                  {activeTemplate.rearBench.map((sId) => {
-                    const state = seatConfig[sId] || 'available'
-                    return (
-                      <button
-                        key={sId}
-                        type="button"
-                        onClick={() => handleSeatClick(sId)}
-                        className={`w-9 h-9 rounded-xl font-mono text-xs font-extrabold border flex items-center justify-center transition-transform hover:scale-105 ${
-                          state === 'blocked'
-                            ? 'bg-amber-100 border-amber-400 text-amber-900'
-                            : state === 'female'
-                            ? 'bg-pink-100 border-pink-400 text-pink-900'
-                            : state === 'male'
-                            ? 'bg-blue-100 border-blue-400 text-blue-900'
-                            : 'bg-white border-gray-300 text-gray-800 hover:border-[#F8B018]'
-                        }`}
-                        title={`Seat ${sId} (${state})`}
-                      >
-                        {sId}
-                      </button>
-                    )
-                  })}
+                <div className="flex justify-between gap-1 sm:gap-1.5">
+                  {activeTemplate.rearBench.map((sId) => renderSchedulerSeat(sId))}
                 </div>
               </div>
             )}

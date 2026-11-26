@@ -43,6 +43,7 @@ import {
 } from '@/lib/domain/seats/bus-templates'
 import { todayIST } from '@/lib/time/ist'
 import { ThemedDatePickerModal } from '@/components/ui/ThemedDatePickerModal'
+import { AdminBusSeatGraphic } from './AdminBusSeatGraphic'
 
 interface ScheduledTripSummary {
   tripId: string
@@ -410,6 +411,53 @@ export function ManualCounterBooking({
         syncSelectedSeatsFromPassengers(updated)
       }
     }
+  }
+
+  // Render individual realistic bus seat matching frontend styling
+  const renderSeat = (sId: string) => {
+    const sUpper = sId.toUpperCase()
+    const isTaken = !!takenSeats[sId] || !!takenSeats[sUpper]
+    const takenGender = takenSeats[sId] || takenSeats[sUpper]
+    const isSelected = selectedSeats.includes(sUpper)
+    const paxInfo = bookedDetails[sId] || bookedDetails[sUpper]
+
+    const titleText = isTaken
+      ? `Seat ${sUpper}: Booked by ${paxInfo?.name || (takenGender === 'F' ? 'Female Passenger' : 'Male Passenger')}${paxInfo?.mobile ? ` (${paxInfo.mobile})` : ''}`
+      : isSelected
+      ? `Seat ${sUpper}: Selected for counter booking (Click to unselect)`
+      : `Seat ${sUpper}: Available (Click to select for booking)`
+
+    return (
+      <button
+        key={sUpper}
+        type="button"
+        data-seat-id={sUpper}
+        disabled={isTaken}
+        onClick={() => toggleSeatOnChart(sUpper)}
+        onMouseEnter={() => setHoveredSeat(sUpper)}
+        onMouseLeave={() => setHoveredSeat(null)}
+        title={titleText}
+        aria-label={titleText}
+        aria-pressed={isSelected}
+        className={`group relative inline-flex items-center justify-center p-0.5 rounded-lg border-0 bg-transparent transition-all duration-150 ${
+          isTaken
+            ? 'cursor-not-allowed opacity-90'
+            : isSelected
+            ? 'cursor-pointer scale-105 filter drop-shadow-[0_4px_10px_rgba(248,176,24,0.45)]'
+            : 'cursor-pointer hover:-translate-y-1 hover:scale-105 active:scale-95'
+        }`}
+      >
+        <AdminBusSeatGraphic
+          seatId={sUpper}
+          status={isSelected ? 'selected' : isTaken ? (takenGender === 'F' ? 'female' : 'male') : 'available'}
+          gender={takenGender}
+          isSelected={isSelected}
+          isOccupied={isTaken}
+          width={36}
+          height={42}
+        />
+      </button>
+    )
   }
 
   // Update a field for a specific passenger in the manual entry form
@@ -1010,224 +1058,101 @@ export function ManualCounterBooking({
               </div>
             )}
 
-            {/* Visual Bus Hull Chart */}
-            <div className="max-w-md mx-auto bg-gray-50 rounded-2xl border-2 border-dashed border-gray-300 p-4 space-y-3 relative">
-              {/* Driver & Door Header */}
-              <div className="flex justify-between items-center pb-2 border-b border-gray-200 text-xs font-bold text-gray-400">
-                <span className="text-[11px] uppercase tracking-wider">Entry Door &rarr;</span>
-                <span className="px-2.5 py-0.5 bg-gray-200 text-gray-700 rounded-md text-[10px] font-mono">
-                  Driver Cabin 🛞
-                </span>
+            {/* Visual Bus Hull Chart matching frontend */}
+            <div className="flow-bus-shell flow-seat-map max-w-[420px] mx-auto bg-white rounded-[28px] border-2 border-slate-300 p-5 shadow-sm space-y-4 relative">
+              {/* Driver & Entrance Header matching frontend */}
+              <div className="flow-driver-cabin flex justify-between items-center pb-3 border-b-2 border-dashed border-slate-200">
+                <div className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Front Entrance &rarr;</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
+                    Driver Cabin
+                  </span>
+                  <div
+                    className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-500 shadow-2xs"
+                    title="Driver's Steering Wheel"
+                  >
+                    <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+                      <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
+                      <circle cx="16" cy="16" r="3.5" fill="currentColor" />
+                      <line x1="16" y1="3" x2="16" y2="12.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                      <line x1="6.8" y1="21.3" x2="13.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                      <line x1="25.2" y1="21.3" x2="18.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               {/* Front Cabin Seats if any */}
-              {template.frontSeats.length > 0 && (
-                <div className="flex justify-end gap-2 pb-2 border-b border-gray-200">
-                  {template.frontSeats.map((sId) => {
-                    const isTaken = !!takenSeats[sId]
-                    const takenGender = takenSeats[sId]
-                    const isSelected = selectedSeats.includes(sId.toUpperCase())
-                    const paxInfo = bookedDetails[sId]
-
-                    return (
-                      <button
-                        key={sId}
-                        type="button"
-                        onClick={() => toggleSeatOnChart(sId)}
-                        onMouseEnter={() => setHoveredSeat(sId)}
-                        onMouseLeave={() => setHoveredSeat(null)}
-                        title={
-                          isTaken
-                            ? `Seat ${sId}: Booked (${paxInfo ? paxInfo.name : takenGender === 'F' ? 'Female' : 'Male'})`
-                            : `Seat ${sId}: Available (Click to select)`
-                        }
-                        className={`w-10 h-10 rounded-xl text-xs font-black font-mono transition-all flex items-center justify-center border relative ${
-                          isTaken
-                            ? 'bg-slate-700 text-white border-slate-800 shadow-xs'
-                            : isSelected
-                            ? 'bg-[#F8B018] text-white border-amber-600 shadow-md scale-105'
-                            : 'bg-white text-gray-800 border-gray-300 hover:border-[#F8B018]'
-                        }`}
-                      >
-                        {isTaken ? (
-                          <div className="flex flex-col items-center justify-center leading-none">
-                            <span className="text-[9px] font-bold">{sId}</span>
-                            <span
-                              className={`text-[7px] font-black uppercase px-0.5 rounded-xs mt-0.5 ${
-                                takenGender === 'F' ? 'bg-pink-500 text-white' : 'bg-blue-500 text-white'
-                              }`}
-                            >
-                              {takenGender === 'F' ? 'F' : 'M'}
-                            </span>
-                          </div>
-                        ) : (
-                          sId
-                        )}
-                      </button>
-                    )
-                  })}
+              {template.frontSeats && template.frontSeats.length > 0 && (
+                <div className="flex items-center justify-end gap-1.5 pb-2.5 border-b border-slate-100">
+                  <span className="text-[10px] font-mono font-bold text-slate-400 uppercase mr-1">
+                    Front Cabin:
+                  </span>
+                  {template.frontSeats.map((sId) => renderSeat(sId))}
                 </div>
               )}
 
-              {/* Rows */}
+              {/* Main Passenger Rows */}
               <div className="space-y-2">
                 {template.rows.map((row) => (
-                  <div key={row.rowLabel} className="flex items-center justify-between gap-2">
+                  <div key={row.rowLabel} className="flex items-center justify-between gap-1 sm:gap-2">
                     {/* Left Seats */}
-                    <div className="flex items-center gap-1.5">
-                      {row.leftSeats.map((sId) => {
-                        const isTaken = !!takenSeats[sId]
-                        const takenGender = takenSeats[sId]
-                        const isSelected = selectedSeats.includes(sId.toUpperCase())
-                        const paxInfo = bookedDetails[sId]
-
-                        return (
-                          <button
-                            key={sId}
-                            type="button"
-                            onClick={() => toggleSeatOnChart(sId)}
-                            onMouseEnter={() => setHoveredSeat(sId)}
-                            onMouseLeave={() => setHoveredSeat(null)}
-                            title={
-                              isTaken
-                                ? `Seat ${sId}: Booked by ${paxInfo ? `${paxInfo.name} (${paxInfo.mobile})` : takenGender === 'F' ? 'Female' : 'Male'}`
-                                : `Seat ${sId}: Available (Click to select or enter manually)`
-                            }
-                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-xs font-black font-mono transition-all flex items-center justify-center border ${
-                              isTaken
-                                ? 'bg-slate-700 text-white border-slate-800 shadow-xs cursor-pointer'
-                                : isSelected
-                                ? 'bg-[#F8B018] text-white border-amber-600 shadow-md scale-105'
-                                : 'bg-white text-gray-800 border-gray-300 hover:border-[#F8B018] cursor-pointer'
-                            }`}
-                          >
-                            {isTaken ? (
-                              <div className="flex flex-col items-center justify-center leading-none">
-                                <span className="text-[9px] font-bold">{sId}</span>
-                                <span
-                                  className={`text-[7px] font-black uppercase px-0.5 rounded-xs mt-0.5 ${
-                                    takenGender === 'F' ? 'bg-pink-500 text-white' : 'bg-blue-500 text-white'
-                                  }`}
-                                >
-                                  {takenGender === 'F' ? 'F' : 'M'}
-                                </span>
-                              </div>
-                            ) : (
-                              sId
-                            )}
-                          </button>
-                        )
-                      })}
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                      {row.leftSeats.map((sId) => renderSeat(sId))}
                     </div>
 
-                    {/* Aisle Spacer */}
-                    <span className="text-[10px] text-gray-400 font-mono select-none px-1">
-                      {row.rowLabel}
-                    </span>
+                    {/* Aisle Spacer with Textured Dashed Center Guide */}
+                    <div className="flex-1 flex items-center justify-center px-1">
+                      <div className="h-9 w-6 flex items-center justify-center relative">
+                        <span className="text-[10px] font-mono font-bold text-slate-300 select-none">
+                          {row.rowLabel}
+                        </span>
+                        <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 border-r border-dashed border-slate-200" />
+                      </div>
+                    </div>
 
                     {/* Right Seats */}
-                    <div className="flex items-center gap-1.5">
-                      {row.rightSeats.map((sId) => {
-                        const isTaken = !!takenSeats[sId]
-                        const takenGender = takenSeats[sId]
-                        const isSelected = selectedSeats.includes(sId.toUpperCase())
-                        const paxInfo = bookedDetails[sId]
-
-                        return (
-                          <button
-                            key={sId}
-                            type="button"
-                            onClick={() => toggleSeatOnChart(sId)}
-                            onMouseEnter={() => setHoveredSeat(sId)}
-                            onMouseLeave={() => setHoveredSeat(null)}
-                            title={
-                              isTaken
-                                ? `Seat ${sId}: Booked by ${paxInfo ? `${paxInfo.name} (${paxInfo.mobile})` : takenGender === 'F' ? 'Female' : 'Male'}`
-                                : `Seat ${sId}: Available (Click to select or enter manually)`
-                            }
-                            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl text-xs font-black font-mono transition-all flex items-center justify-center border ${
-                              isTaken
-                                ? 'bg-slate-700 text-white border-slate-800 shadow-xs cursor-pointer'
-                                : isSelected
-                                ? 'bg-[#F8B018] text-white border-amber-600 shadow-md scale-105'
-                                : 'bg-white text-gray-800 border-gray-300 hover:border-[#F8B018] cursor-pointer'
-                            }`}
-                          >
-                            {isTaken ? (
-                              <div className="flex flex-col items-center justify-center leading-none">
-                                <span className="text-[9px] font-bold">{sId}</span>
-                                <span
-                                  className={`text-[7px] font-black uppercase px-0.5 rounded-xs mt-0.5 ${
-                                    takenGender === 'F' ? 'bg-pink-500 text-white' : 'bg-blue-500 text-white'
-                                  }`}
-                                >
-                                  {takenGender === 'F' ? 'F' : 'M'}
-                                </span>
-                              </div>
-                            ) : (
-                              sId
-                            )}
-                          </button>
-                        )
-                      })}
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                      {row.rightSeats.map((sId) => renderSeat(sId))}
                     </div>
                   </div>
                 ))}
               </div>
 
               {/* Rear Bench */}
-              {template.rearBench.length > 0 && (
-                <div className="pt-2 border-t border-gray-200">
-                  <div className="text-[10px] text-gray-400 text-center uppercase tracking-widest mb-1.5 font-bold">
-                    Rear Bench
+              {template.rearBench && template.rearBench.length > 0 && (
+                <div className="pt-3 border-t-2 border-slate-200">
+                  <div className="text-[10px] text-slate-400 text-center uppercase tracking-widest mb-2 font-bold font-mono">
+                    Rear Bench ({template.rearBench.length} Seats)
                   </div>
-                  <div className="flex justify-between gap-1">
-                    {template.rearBench.map((sId) => {
-                      const isTaken = !!takenSeats[sId]
-                      const takenGender = takenSeats[sId]
-                      const isSelected = selectedSeats.includes(sId.toUpperCase())
-                      const paxInfo = bookedDetails[sId]
-
-                      return (
-                        <button
-                          key={sId}
-                          type="button"
-                          onClick={() => toggleSeatOnChart(sId)}
-                          onMouseEnter={() => setHoveredSeat(sId)}
-                          onMouseLeave={() => setHoveredSeat(null)}
-                          title={
-                            isTaken
-                              ? `Seat ${sId}: Booked by ${paxInfo ? `${paxInfo.name} (${paxInfo.mobile})` : takenGender === 'F' ? 'Female' : 'Male'}`
-                              : `Seat ${sId}: Available`
-                          }
-                          className={`flex-1 h-9 rounded-xl text-xs font-black font-mono transition-all flex items-center justify-center border ${
-                            isTaken
-                              ? 'bg-slate-700 text-white border-slate-800 shadow-xs cursor-pointer'
-                              : isSelected
-                              ? 'bg-[#F8B018] text-white border-amber-600 shadow-md scale-105'
-                              : 'bg-white text-gray-800 border-gray-300 hover:border-[#F8B018] cursor-pointer'
-                          }`}
-                        >
-                          {isTaken ? (
-                            <div className="flex flex-col items-center justify-center leading-none">
-                              <span className="text-[9px] font-bold">{sId}</span>
-                              <span
-                                className={`text-[7px] font-black uppercase px-0.5 rounded-xs mt-0.5 ${
-                                  takenGender === 'F' ? 'bg-pink-500 text-white' : 'bg-blue-500 text-white'
-                                }`}
-                              >
-                                {takenGender === 'F' ? 'F' : 'M'}
-                              </span>
-                            </div>
-                          ) : (
-                            sId
-                          )}
-                        </button>
-                      )
-                    })}
+                  <div className="flex justify-between gap-1 sm:gap-1.5">
+                    {template.rearBench.map((sId) => renderSeat(sId))}
                   </div>
                 </div>
               )}
+
+              {/* Rules Legend matching frontend exactly */}
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-3 border-t border-slate-100 text-xs font-medium">
+                <span className="flex items-center gap-1.5 text-slate-600">
+                  <span className="w-3.5 h-3.5 rounded-sm border-1.5 border-[#5A6474] bg-white inline-block shadow-2xs" />
+                  <span>Available</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-slate-900 font-bold">
+                  <span className="w-3.5 h-3.5 rounded-sm border-1.5 border-[#0B0F19] bg-[#F8B018] inline-block shadow-2xs" />
+                  <span>Selected</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-slate-600">
+                  <span className="w-3.5 h-3.5 rounded-sm border-1.5 border-[#5A6474] bg-[#D8DAE0] inline-block shadow-2xs" />
+                  <span>Booked (Male)</span>
+                </span>
+                <span className="flex items-center gap-1.5 text-pink-700 font-bold">
+                  <span className="w-3.5 h-3.5 rounded-sm border-1.5 border-[#A855F7] bg-[#FCE7F3] inline-block shadow-2xs" />
+                  <span>Booked (Female)</span>
+                </span>
+              </div>
             </div>
 
             {/* Hovered Seat Detail Card (Shows Real-time Booking Details) */}
