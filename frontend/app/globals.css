@@ -1545,8 +1545,8 @@
 .availability-page { min-height:100vh; background:#F3F4F6; color:#111827; padding-bottom:3.5rem; }.availability-header { position: -webkit-sticky; position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; height: 64px; padding: 0 1rem; background: #ffffff; border-bottom: 1px solid #E5E7EB; box-shadow: 0 1px 3px rgba(0,0,0,.04); }.availability-header button { display:grid; place-items:center; width:44px; height:44px; border:0; background:none; color:#374151; }.availability-logo { display:flex; align-items:center; gap:.6rem; color:#111827; text-decoration:none; font-size:.75rem; letter-spacing:.15em; }.availability-hero,
 .seats-hero {
   position: relative;
-  height: 320px !important;
-  min-height: 320px !important;
+  height: 310px !important;
+  min-height: 310px !important;
   overflow: hidden;
   background: url('/images/maharashtra-cityscape-hero.png') 68% center / cover no-repeat !important;
   transition: height .25s ease, opacity .25s ease;

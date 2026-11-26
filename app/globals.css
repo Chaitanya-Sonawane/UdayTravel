@@ -1551,8 +1551,8 @@
 .availability-hero,
 .seats-hero {
   position: relative;
-  height: 320px !important;
-  min-height: 320px !important;
+  height: 310px !important;
+  min-height: 310px !important;
   overflow: hidden;
   background: url('/images/maharashtra-cityscape-hero.png') 68% center / cover no-repeat !important;
   transition: height .25s ease, opacity .25s ease;
