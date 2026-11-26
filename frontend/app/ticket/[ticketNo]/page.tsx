@@ -54,9 +54,18 @@ export default function TicketPage() {
   const [qr, setQr] = useState(false)
   const [cancelModal, setCancelModal] = useState(false)
 
-  const [ticket, setTicket] = useState<any>(() =>
-    ticketNo ? getTicket(String(ticketNo)) : null
-  )
+  const [ticket, setTicket] = useState<any>(() => {
+    if (!ticketNo) return null
+    const fixture = getTicket(String(ticketNo))
+    if (fixture) return fixture
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(`uday_ticket_${ticketNo}`)
+        if (stored) return JSON.parse(stored)
+      } catch {}
+    }
+    return null
+  })
   const [loading, setLoading] = useState(true)
 
   // Navigation drawer state & auth matching Availability Page
@@ -101,6 +110,11 @@ export default function TicketPage() {
           const liveData = await res.json()
           if (active && liveData) {
             setTicket(liveData)
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem(`uday_ticket_${ticketNo}`, JSON.stringify(liveData))
+              } catch {}
+            }
             setLoading(false)
             return
           }
@@ -667,6 +681,7 @@ export default function TicketPage() {
         <CancellationModal
           ticketNo={ticket.ticketNo}
           isOpen={cancelModal}
+          initialTicket={ticket}
           onClose={() => setCancelModal(false)}
           onSuccess={(res) => {
             if (res.ticket) setTicket(res.ticket)

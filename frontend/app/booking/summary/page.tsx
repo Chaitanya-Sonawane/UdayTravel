@@ -333,6 +333,17 @@ export default function BookingSummaryPage() {
         }
         dispatch({ type: 'SUCCESS' })
         const destTicket = verifyData.ticketNo || verifyData.pnr
+        if (typeof window !== 'undefined' && destTicket) {
+          try {
+            if (verifyData.ticket) {
+              localStorage.setItem(`uday_ticket_${destTicket}`, JSON.stringify(verifyData.ticket))
+            }
+            const existingMyTickets = JSON.parse(localStorage.getItem('uday_my_tickets') || '[]')
+            const item = verifyData.ticket || { ticketNo: destTicket }
+            const updated = [item, ...existingMyTickets.filter((t: any) => t.ticketNo !== destTicket)]
+            localStorage.setItem('uday_my_tickets', JSON.stringify(updated))
+          } catch {}
+        }
         window.location.href = `/ticket/${destTicket}`
         return
       }
@@ -398,6 +409,17 @@ export default function BookingSummaryPage() {
             }
             dispatch({ type: 'SUCCESS' })
             const destTicket = verifyResult.ticketNo || verifyResult.pnr
+            if (typeof window !== 'undefined' && destTicket) {
+              try {
+                if (verifyResult.ticket) {
+                  localStorage.setItem(`uday_ticket_${destTicket}`, JSON.stringify(verifyResult.ticket))
+                }
+                const existingMyTickets = JSON.parse(localStorage.getItem('uday_my_tickets') || '[]')
+                const item = verifyResult.ticket || { ticketNo: destTicket }
+                const updated = [item, ...existingMyTickets.filter((t: any) => t.ticketNo !== destTicket)]
+                localStorage.setItem('uday_my_tickets', JSON.stringify(updated))
+              } catch {}
+            }
             window.location.href = `/ticket/${destTicket}`
           } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Verification failed'

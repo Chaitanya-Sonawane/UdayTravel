@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/server/guard'
 import { VerifyPaymentRequestSchema } from '@/lib/schemas/payment.schema'
 import { OrdersRepository } from '@/lib/data/orders.repo'
+import { TicketsRepository } from '@/lib/data/tickets.repo'
 import { verifyPaymentSignature } from '@/lib/payments/signature'
 import { confirmBooking } from '@/lib/payments/confirm'
 import { AppError, ErrorCodes } from '@/lib/errors/app-error'
@@ -100,11 +101,14 @@ export async function POST(req: Request) {
       source: 'VERIFY_API',
     })
 
+    const ticketDoc = await TicketsRepository.getTicket(result.ticketNo)
+
     return NextResponse.json({
       success: true,
       pnr: result.ticketNo,
       ticketNo: result.ticketNo,
       status: 'CONFIRMED',
+      ticket: ticketDoc || undefined,
     })
   } catch (err: unknown) {
     return AppError.fromUnknown(err).toResponse()

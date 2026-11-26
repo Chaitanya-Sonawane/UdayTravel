@@ -2,6 +2,7 @@ export const runtime = 'nodejs'
 import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/server/guard'
 import { cancelBooking } from '@/lib/payments/cancel'
+import { TicketsRepository } from '@/lib/data/tickets.repo'
 import { AppError } from '@/lib/errors/app-error'
 import { buildCancellationNotification } from '@/lib/notifications/cancellation'
 
@@ -22,11 +23,21 @@ export async function POST(
     )
   }
 
-  let body: { reason?: string; selectedSeats?: string[] } = {}
+  let body: { reason?: string; selectedSeats?: string[]; ticket?: any } = {}
   try {
     body = await req.json()
   } catch {
     // Body is optional
+  }
+
+  // If client provided verified ticket data and server lacks the document (e.g. across lambdas), seed it
+  if (body.ticket && body.ticket.ticketNo === ticketNo) {
+    try {
+      const existing = await TicketsRepository.getTicket(ticketNo)
+      if (!existing) {
+        await TicketsRepository.saveTicket(body.ticket)
+      }
+    } catch {}
   }
 
   const isAnonymous = auth.token.firebase?.sign_in_provider === 'anonymous'

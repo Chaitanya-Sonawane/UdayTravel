@@ -25,7 +25,15 @@ const serviceAccount = {
     'firebase-adminsdk-fbsvc@united18-a884d.iam.gserviceaccount.com',
 }
 
-const DEV_STORAGE_FILE = path.join(process.cwd(), '.dev-firestore-store.json')
+function getDevStoragePaths(): string[] {
+  const list: string[] = []
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || fs.existsSync('/tmp')) {
+    list.push(path.join('/tmp', '.dev-firestore-store.json'))
+  }
+  list.push(path.join(process.cwd(), '.dev-firestore-store.json'))
+  return list
+}
+
 const isVitest = Boolean(process.env.VITEST || process.env.NODE_ENV === 'test')
 
 function loadDevStore(): Map<string, any> {
@@ -33,16 +41,19 @@ function loadDevStore(): Map<string, any> {
   if (isVitest) {
     return store
   }
-  try {
-    if (fs.existsSync(DEV_STORAGE_FILE)) {
-      const content = fs.readFileSync(DEV_STORAGE_FILE, 'utf-8')
-      const parsed = JSON.parse(content)
-      for (const [k, v] of Object.entries(parsed)) {
-        store.set(k, v)
+  for (const p of getDevStoragePaths()) {
+    try {
+      if (fs.existsSync(p)) {
+        const content = fs.readFileSync(p, 'utf-8')
+        const parsed = JSON.parse(content)
+        for (const [k, v] of Object.entries(parsed)) {
+          store.set(k, v)
+        }
+        if (store.size > 0) break
       }
+    } catch {
+      // try next path
     }
-  } catch (_err) {
-    // dev storage file not present or unreadable
   }
 
   // Pre-seed default fleet buses if missing
@@ -64,14 +75,18 @@ function saveDevStore(store: Map<string, any>) {
   if (isVitest) {
     return
   }
-  try {
-    const obj: Record<string, any> = {}
-    for (const [k, v] of store.entries()) {
-      obj[k] = v
+  const obj: Record<string, any> = {}
+  for (const [k, v] of store.entries()) {
+    obj[k] = v
+  }
+  const serialized = JSON.stringify(obj, null, 2)
+  for (const p of getDevStoragePaths()) {
+    try {
+      fs.writeFileSync(p, serialized, 'utf-8')
+      break
+    } catch {
+      // try next path if readonly
     }
-    fs.writeFileSync(DEV_STORAGE_FILE, JSON.stringify(obj, null, 2), 'utf-8')
-  } catch (_err) {
-    // dev storage persistence fallback
   }
 }
 
@@ -88,7 +103,7 @@ export function clearDevMemoryStore() {
 const devMemoryStore = isVitest
   ? new Map<string, any>()
   : (globalForDev.__devMemoryStore ?? loadDevStore())
-if (process.env.NODE_ENV !== 'production' && !isVitest) {
+if (!isVitest) {
   globalForDev.__devMemoryStore = devMemoryStore
 }
 
@@ -132,7 +147,14 @@ class DevDocRef {
   }
 
   async get() {
-    const data = devMemoryStore.get(this.key)
+    let data = devMemoryStore.get(this.key)
+    if (!data && !isVitest) {
+      const fresh = loadDevStore()
+      data = fresh.get(this.key)
+      if (data) {
+        devMemoryStore.set(this.key, data)
+      }
+    }
     return {
       id: this.docId,
       path: this.path,

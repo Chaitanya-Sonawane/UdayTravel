@@ -44,8 +44,25 @@ export function CancellationModal({
   initialTicket,
   initialTimeline,
 }: CancellationModalProps) {
-  const [ticket, setTicket] = useState<any>(initialTicket || null)
-  const [loading, setLoading] = useState(!initialTicket)
+  const [ticket, setTicket] = useState<any>(() => {
+    if (initialTicket) return initialTicket
+    if (typeof window !== 'undefined' && ticketNo) {
+      try {
+        const stored = localStorage.getItem(`uday_ticket_${ticketNo}`)
+        if (stored) return JSON.parse(stored)
+      } catch {}
+    }
+    return null
+  })
+  const [loading, setLoading] = useState(() => {
+    if (initialTicket) return false
+    if (typeof window !== 'undefined' && ticketNo) {
+      try {
+        if (localStorage.getItem(`uday_ticket_${ticketNo}`)) return false
+      } catch {}
+    }
+    return true
+  })
   const [error, setError] = useState('')
   const [walletBalancePaise, setWalletBalancePaise] = useState<number>(0)
   const [cancelling, setCancelling] = useState(false)
@@ -113,6 +130,21 @@ export function CancellationModal({
         ])
 
         if (!ticketRes.ok) {
+          if (typeof window !== 'undefined' && ticketNo) {
+            try {
+              const stored = localStorage.getItem(`uday_ticket_${ticketNo}`)
+              if (stored) {
+                const parsed = JSON.parse(stored)
+                if (parsed && (parsed.ticketNo === ticketNo || !parsed.ticketNo)) {
+                  if (active) {
+                    setTicket(parsed)
+                    setLoading(false)
+                    return
+                  }
+                }
+              }
+            } catch {}
+          }
           const errData = await ticketRes.json().catch(() => null)
           throw new Error(errData?.error?.message || 'Failed to load ticket details')
         }
@@ -187,11 +219,19 @@ export function CancellationModal({
         body: JSON.stringify({
           reason: 'Customer requested cancellation from cancellation screen',
           selectedSeats,
+          ticket,
         }),
       })
       const data = await res.json()
       if (!res.ok) {
         throw new Error(data.error?.message || 'Cancellation request was rejected by server')
+      }
+
+      if (typeof window !== 'undefined') {
+        try {
+          const updated = { ...ticket, status: 'CANCELLED' }
+          localStorage.setItem(`uday_ticket_${ticket.ticketNo}`, JSON.stringify(updated))
+        } catch {}
       }
 
       setCancelledResult({

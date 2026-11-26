@@ -426,6 +426,7 @@ export default function BookingsPage() {
         <CancellationModal
           ticketNo={selectedTicketForCancel}
           isOpen={Boolean(selectedTicketForCancel)}
+          initialTicket={tickets.find((t: any) => t.ticketNo === selectedTicketForCancel)}
           onClose={() => setSelectedTicketForCancel(null)}
           onSuccess={(res) => {
             setTickets((prev) =>

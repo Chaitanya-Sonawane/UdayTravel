@@ -42,6 +42,12 @@ export class TicketsRepository {
     t.create(db.collection('tickets').doc(ticket.ticketNo), ticket)
   }
 
+  static async saveTicket(ticket: TicketDoc): Promise<void> {
+    firestoreMeter.recordWrite('tickets', ticket.ticketNo)
+    const db = getAdminDb()
+    await db.collection('tickets').doc(ticket.ticketNo).set(ticket, { merge: true })
+  }
+
   static async getTicket(ticketNo: string): Promise<TicketDoc | null> {
     firestoreMeter.recordRead('tickets', ticketNo)
     const db = getAdminDb()
