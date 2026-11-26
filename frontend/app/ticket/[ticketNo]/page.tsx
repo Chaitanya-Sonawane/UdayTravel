@@ -690,13 +690,15 @@ export default function TicketPage() {
         />
       )}
 
-      {/* Navigation Drawer matching Availability Page */}
+      {/* Navigation Drawer matching Availability Page in Light Theme */}
       <NavDrawer
         open={sheet}
         onClose={() => setSheet(false)}
         currentUser={currentUser}
         userName={userName}
+        userPhone={currentUser?.phoneNumber || ''}
         onLogout={handleLogout}
+        theme="light"
       />
     </main>
   )

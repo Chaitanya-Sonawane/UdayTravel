@@ -115,7 +115,9 @@ export default function CancelTicketPage() {
         onClose={() => setSheet(false)}
         currentUser={currentUser}
         userName={userName}
+        userPhone={currentUser?.phoneNumber || ''}
         onLogout={handleLogout}
+        theme="light"
       />
     </main>
   )

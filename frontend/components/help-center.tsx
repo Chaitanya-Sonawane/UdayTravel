@@ -59,20 +59,27 @@ export default function HelpCenter() {
 
   return (
     <main className="help-page font-jakarta">
-      <header className="help-header">
-        <Link href="/" className="help-brand flex items-center gap-2.5 group" aria-label="Uday Travels home">
-          <span
-            className="brand-logo-mark w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#F8B018] text-[#0B0F19] font-black flex items-center justify-center font-sans tracking-tight text-xs shadow-xs transition-transform group-hover:scale-105 shrink-0"
-            style={{ backgroundColor: '#F8B018', color: '#0B0F19', fontWeight: 900 }}
+      <div className="w-full bg-white border-b border-gray-200/90 shadow-2xs">
+        <header className="help-header !border-b-0 bg-white">
+          <Link href="/" className="help-brand flex items-center gap-2.5 group" aria-label="Uday Travels home">
+            <span
+              className="brand-logo-mark w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#F8B018] text-[#0B0F19] font-black flex items-center justify-center font-sans tracking-tight text-xs shadow-xs transition-transform group-hover:scale-105 shrink-0"
+              style={{ backgroundColor: '#F8B018', color: '#0B0F19', fontWeight: 900 }}
+            >
+              UT
+            </span>
+            <span className="font-black text-sm tracking-widest text-gray-950 group-hover:text-black transition-colors font-sans">
+              UDAY TRAVELS
+            </span>
+          </Link>
+          <Link
+            href="/availability"
+            className="help-book-link !border-gray-900 !text-gray-900 hover:!bg-gray-100 transition-colors"
           >
-            UT
-          </span>
-          <span className="font-black text-sm tracking-widest text-[#171711] group-hover:text-black transition-colors font-sans">
-            UDAY TRAVELS
-          </span>
-        </Link>
-        <Link href="/availability" className="help-book-link">Plan a trip <ArrowUpRight size={15} aria-hidden="true" /></Link>
-      </header>
+            Plan a trip <ArrowUpRight size={15} aria-hidden="true" />
+          </Link>
+        </header>
+      </div>
 
       <section className="help-hero-band">
         <div className="help-hero-copy">
