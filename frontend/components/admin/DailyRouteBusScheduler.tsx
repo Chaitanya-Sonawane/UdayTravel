@@ -5,7 +5,6 @@ import {
   Bus,
   Calendar,
   Clock,
-  DollarSign,
   Grid3X3,
   CheckCircle2,
   AlertCircle,
@@ -102,7 +101,7 @@ export function DailyRouteBusScheduler({
   // Step 4: Trip Timetable & Fare State
   const [departureTime, setDepartureTime] = useState('06:00')
   const [arrivalTime, setArrivalTime] = useState('09:15')
-  const [fare, setFare] = useState<number>(200)
+  const [fare, setFare] = useState<number | ''>(200)
 
   // Published trips on selected route/date
   const [scheduledTrips, setScheduledTrips] = useState<any[]>([])
@@ -229,7 +228,7 @@ export function DailyRouteBusScheduler({
           templateId: currentBus.templateId,
           departureTime,
           arrivalTime,
-          fare: Number(fare),
+          fare: typeof fare === 'number' && fare >= 50 ? fare : 200,
           seatConfig,
         }),
       })
@@ -474,18 +473,26 @@ export function DailyRouteBusScheduler({
                 <div
                   key={b.id}
                   onClick={() => setSelectedBusId(b.id)}
-                  className={`p-3.5 rounded-2xl border cursor-pointer transition-all relative ${
+                  className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
                     isSelected
-                      ? 'border-[#F8B018] bg-[#FFFDF5] ring-2 ring-[#F8B018]/25 shadow-xs'
-                      : 'border-gray-200 bg-gray-50/70 hover:bg-gray-100/80 text-gray-700'
+                      ? 'border-[#F8B018] bg-amber-50/50 text-gray-900 shadow-sm ring-2 ring-amber-300/60'
+                      : 'border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50/80 text-gray-700'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
-                    <span className="text-[11px] font-mono font-extrabold px-2 py-0.5 rounded-lg bg-gray-200/70 text-gray-800">
-                      {b.busNumber}
-                    </span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      {/* Big Font Bus Number */}
+                      <div className="text-base sm:text-lg font-mono font-black text-gray-950 tracking-wider flex items-center gap-1.5">
+                        <Bus size={18} className="text-[#F8B018] shrink-0" />
+                        <span>{b.busNumber}</span>
+                      </div>
+                      <h3 className="font-bold text-xs text-gray-600 mt-1 leading-snug">
+                        {b.busName}
+                      </h3>
+                    </div>
+
                     <span
-                      className={`text-[10px] uppercase font-black px-2 py-0.5 rounded-full ${
+                      className={`text-[10px] uppercase font-black px-2.5 py-1 rounded-full shrink-0 ${
                         b.templateId === 'BUS_55'
                           ? 'bg-amber-100 text-amber-900 border border-amber-200'
                           : b.templateId === 'BUS_44'
@@ -496,10 +503,6 @@ export function DailyRouteBusScheduler({
                       {tpl.capacity} Seats · {tpl.layoutType}
                     </span>
                   </div>
-
-                  <h3 className="font-extrabold text-xs text-gray-900 mt-2 leading-snug">
-                    {b.busName}
-                  </h3>
 
                   {isSelected && (
                     <div className="absolute -top-2 -right-2 w-6 h-6 bg-[#F8B018] text-white rounded-full flex items-center justify-center shadow-xs">
@@ -672,17 +675,38 @@ export function DailyRouteBusScheduler({
             {/* Fare */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-gray-700">Fare (₹)</label>
-              <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 rounded-xl px-3 py-2.5">
-                <DollarSign size={16} className="text-emerald-600" />
+              <div className="flex items-center gap-2 bg-gray-50 border border-gray-300 focus-within:border-[#F8B018] focus-within:ring-2 focus-within:ring-amber-200/50 rounded-xl px-3 py-2.5 transition-all">
+                <span className="text-sm font-black text-emerald-700 font-sans select-none">₹</span>
                 <input
                   type="number"
                   min="50"
                   max="5000"
                   required
+                  placeholder="200"
                   value={fare}
-                  onChange={(e) => setFare(Number(e.target.value))}
-                  className="bg-transparent text-sm font-bold text-gray-900 outline-none w-full"
+                  onChange={(e) => {
+                    const val = e.target.value
+                    if (val === '') {
+                      setFare('')
+                    } else {
+                      const num = Number(val)
+                      if (!isNaN(num)) setFare(num)
+                    }
+                  }}
+                  className="bg-transparent text-sm font-bold text-gray-900 outline-none w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
+              </div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {[200, 220, 250, 300].map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setFare(f)}
+                    className="text-[10px] px-2 py-0.5 bg-gray-100 hover:bg-gray-200 active:bg-amber-100 text-gray-700 rounded-md font-mono font-bold transition-colors cursor-pointer"
+                  >
+                    ₹{f}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
@@ -748,22 +772,22 @@ export function DailyRouteBusScheduler({
                 key={t.tripId}
                 className="p-4 sm:p-5 bg-white border border-gray-200 hover:border-[#F8B018] rounded-2xl space-y-3.5 transition-all shadow-xs hover:shadow-md flex flex-col justify-between"
               >
-                {/* Header: Title, Layout Badge, Bus Number & Price Tag */}
+                {/* Header: Bus Number in Big Font, Name & Price Tag */}
                 <div className="flex flex-wrap items-start justify-between gap-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-extrabold text-sm sm:text-base text-gray-900 leading-snug">
-                        {t.busName}
-                      </h4>
+                      <span className="text-base sm:text-lg font-mono font-black text-gray-950 tracking-wider">
+                        {t.busNumber || 'Fleet Vehicle'}
+                      </span>
                       {t.templateId && (
                         <span className="text-[10px] bg-amber-100 text-amber-900 border border-amber-200 font-extrabold px-1.5 py-0.5 rounded-md shrink-0">
                           {t.templateId}
                         </span>
                       )}
                     </div>
-                    <span className="text-[11px] font-mono text-gray-500 font-bold block mt-0.5">
-                      {t.busNumber || 'Fleet Vehicle'}
-                    </span>
+                    <h4 className="font-semibold text-xs text-gray-600 leading-snug mt-0.5">
+                      {t.busName}
+                    </h4>
                   </div>
 
                   <span className="text-xs sm:text-sm font-extrabold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl shrink-0">

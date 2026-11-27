@@ -49,7 +49,7 @@ const allSeats55 = [
 
 export const BUS_55_TEMPLATE: BusLayoutTemplate = {
   id: 'BUS_55',
-  name: 'Uday Express 55-Seater',
+  name: 'Uday Bus 55-Seater',
   busNumber: 'MH 16 DP 4951',
   capacity: 55,
   layoutType: '2+3',
@@ -103,7 +103,7 @@ const allSeats44 = [
 
 export const BUS_44_TEMPLATE: BusLayoutTemplate = {
   id: 'BUS_44',
-  name: 'Uday Express 44-Seater Executive',
+  name: 'Uday Bus 44-Seater Executive',
   busNumber: 'MH 16 DV 1003',
   capacity: 44,
   layoutType: '2+2',
@@ -158,7 +158,7 @@ const allSeats33 = [
 
 export const BUS_33_TEMPLATE: BusLayoutTemplate = {
   id: 'BUS_33',
-  name: 'Uday Express 33-Seater Deluxe',
+  name: 'Uday Bus 33-Seater Deluxe',
   busNumber: 'MH 16 DP 3951',
   capacity: 33,
   layoutType: '2+2',

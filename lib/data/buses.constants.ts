@@ -17,7 +17,7 @@ export const DEFAULT_BUSES: BusDocument[] = [
   {
     id: 'bus_mh16dp4951',
     busNumber: 'MH 16 DP 4951',
-    busName: 'Uday Express 55-Seater (2+3 Layout)',
+    busName: 'Uday Bus 55-Seater (2+3 Layout)',
     templateId: 'BUS_55',
     seatLayout: '2+3 Seater',
     totalSeats: 55,
@@ -31,7 +31,7 @@ export const DEFAULT_BUSES: BusDocument[] = [
   {
     id: 'bus_mh16dv1003',
     busNumber: 'MH 16 DV 1003',
-    busName: 'Uday Express 44-Seater (2+2 Layout)',
+    busName: 'Uday Bus 44-Seater (2+2 Layout)',
     templateId: 'BUS_44',
     seatLayout: '2+2 Seater',
     totalSeats: 44,
@@ -45,7 +45,7 @@ export const DEFAULT_BUSES: BusDocument[] = [
   {
     id: 'bus_mh16dp3951',
     busNumber: 'MH 16 DP 3951',
-    busName: 'Uday Express 33-Seater (2+2 Layout)',
+    busName: 'Uday Bus 33-Seater (2+2 Layout)',
     templateId: 'BUS_33',
     seatLayout: '2+2 Seater',
     totalSeats: 33,

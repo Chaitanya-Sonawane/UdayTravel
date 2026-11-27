@@ -145,7 +145,7 @@ const DEFAULT_COUNTER_TRIP: ScheduledTripSummary = {
   routeId: 'AHM_PUN',
   busId: 'bus_mh16dp4951',
   busNumber: 'MH 16 DP 4951',
-  busName: 'Uday Express',
+  busName: 'Uday Bus',
   templateId: 'BUS_55',
   departureTime: '06:30',
   arrivalTime: '09:15',
@@ -934,9 +934,12 @@ export function ManualCounterBooking({
                       {trip.templateId.replace('_', ' ')}
                     </span>
                   </div>
-                  <div className="text-xs font-bold text-gray-800">{trip.busName}</div>
-                  <div className="text-[11px] text-gray-500 font-mono mt-0.5 flex justify-between items-center">
-                    <span>{trip.busNumber}</span>
+                  {/* Big font bus number */}
+                  <div className="text-base sm:text-lg font-black font-mono text-gray-950 tracking-tight">
+                    {trip.busNumber}
+                  </div>
+                  <div className="text-xs font-semibold text-gray-600 mt-0.5">{trip.busName}</div>
+                  <div className="text-[11px] text-gray-500 font-mono mt-1 flex justify-end items-center">
                     <div className="flex items-center gap-1.5">
                       {typeof (trip as any).booked === 'number' && (trip as any).booked > 0 && (
                         <span className="text-[10px] font-black text-emerald-800 bg-emerald-100 px-1.5 py-0.2 rounded">

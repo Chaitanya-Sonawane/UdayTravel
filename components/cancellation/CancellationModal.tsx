@@ -477,7 +477,7 @@ export function CancellationModal({
                     {busNumber}
                   </strong>
                   <span className="text-gray-500 text-[11px] block mt-0.5 truncate" title={busType}>
-                    {ticket.busName || 'Uday Express'} · {ticket.seatLayout || '3+2 Seater Coach'}
+                    {ticket.busName || 'Uday Bus'} · {ticket.seatLayout || '3+2 Seater Coach'}
                   </span>
                 </div>
               </div>

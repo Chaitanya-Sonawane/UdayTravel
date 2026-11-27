@@ -108,7 +108,7 @@ export async function placeSeatHold(params: PlaceSeatHoldParams): Promise<PlaceS
   // Fetch availability to determine fare and bus name
   const availDoc = await AvailabilityRepository.getAvailabilityDoc(routeId, date)
   let fareRupees = BASE_FARE_INR
-  let busName = 'Uday Express'
+  let busName = 'Uday Bus'
 
   if (availDoc?.trips?.[tripId]) {
     const tr = availDoc.trips[tripId]
