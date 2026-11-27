@@ -96,9 +96,8 @@ export function DailyRouteBusScheduler({
     [templateId]
   )
 
-  // Step 3: Seat Pattern Customization State
+  // Step 3: Seat Customization State
   const [seatConfig, setSeatConfig] = useState<Record<string, SeatState>>({})
-  const [activeTool, setActiveTool] = useState<SeatState>('available')
 
   // Step 4: Trip Timetable & Fare State
   const [departureTime, setDepartureTime] = useState('06:00')
@@ -151,11 +150,11 @@ export function DailyRouteBusScheduler({
     setArrivalTime(calculateArrival(newDep))
   }
 
-  // Seat toggle handler
+  // Seat toggle handler (toggles between available and blocked)
   const handleSeatClick = (seatId: string) => {
     setSeatConfig((prev) => ({
       ...prev,
-      [seatId]: prev[seatId] === activeTool ? 'available' : activeTool,
+      [seatId]: prev[seatId] === 'blocked' ? 'available' : 'blocked',
     }))
   }
 
@@ -171,7 +170,7 @@ export function DailyRouteBusScheduler({
         key={sId}
         type="button"
         onClick={() => handleSeatClick(sId)}
-        title={`Seat ${sId}: ${state} (Click to toggle tool: ${activeTool})`}
+        title={`Seat ${sId}: ${isBlocked ? 'Blocked' : 'Available'} (Click to ${isBlocked ? 'unblock' : 'block'})`}
         aria-label={`Seat ${sId} ${state}`}
         className="group relative inline-flex items-center justify-center p-0 rounded-lg border-0 bg-transparent transition-all duration-150 hover:-translate-y-1 hover:scale-105 active:scale-95 cursor-pointer"
       >
@@ -195,41 +194,13 @@ export function DailyRouteBusScheduler({
     )
   }
 
-  // Quick bulk presets
-  const applyPreset = (preset: 'all-available' | 'ladies-front' | 'conductor-seat' | 'sample-bookings') => {
-    const newMap: Record<string, SeatState> = {}
-    activeTemplate.allSeatIds.forEach((id) => {
-      newMap[id] = 'available'
-    })
-
-    if (preset === 'ladies-front') {
-      // Set rows A & B (or 1-8 for 33 seater) to female
-      activeTemplate.allSeatIds.forEach((id) => {
-        if (id.startsWith('A') || id.startsWith('B') || ['1', '2', '3', '4', '5', '6', '7', '8'].includes(id)) {
-          newMap[id] = 'female'
-        }
-      })
-    } else if (preset === 'conductor-seat') {
-      // Block front seat 1 or rear seat
-      const conductorSeat = activeTemplate.frontSeats[0] || activeTemplate.allSeatIds[0]!
-      newMap[conductorSeat] = 'blocked'
-    } else if (preset === 'sample-bookings') {
-      // Simulate 10 bookings
-      activeTemplate.allSeatIds.slice(0, 10).forEach((id, idx) => {
-        newMap[id] = idx % 2 === 0 ? 'male' : 'female'
-      })
-    }
-
-    setSeatConfig(newMap)
-  }
-
-  // Counters
+  // Real-time seat counts
   const seatStats = useMemo(() => {
     const values = Object.values(seatConfig)
-    const available = values.filter((s) => s === 'available').length
     const blocked = values.filter((s) => s === 'blocked').length
     const female = values.filter((s) => s === 'female').length
     const male = values.filter((s) => s === 'male').length
+    const available = Math.max(0, activeTemplate.capacity - blocked - female - male)
     return {
       total: activeTemplate.capacity,
       available,
@@ -541,7 +512,7 @@ export function DailyRouteBusScheduler({
           </div>
         </div>
 
-        {/* STEP 1C: SEAT PATTERN SELECTION & INTERACTIVE VISUAL MAP */}
+        {/* STEP 1C: SEAT LAYOUT & BUS COACH */}
         <div className="space-y-4 pt-4 border-t border-gray-100">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-gray-500">
@@ -549,107 +520,15 @@ export function DailyRouteBusScheduler({
               <span>Seat Layout ({activeTemplate.capacity} Seats)</span>
             </div>
 
-            {/* Quick Bulk Presets */}
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="text-[10px] text-gray-400 uppercase font-bold">Presets:</span>
-              <button
-                type="button"
-                onClick={() => applyPreset('all-available')}
-                className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-bold"
-              >
-                All Available
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('ladies-front')}
-                className="px-2.5 py-1 bg-pink-50 hover:bg-pink-100 border border-pink-200 text-pink-800 rounded-lg font-bold"
-              >
-                Ladies Front
-              </button>
-              <button
-                type="button"
-                onClick={() => applyPreset('conductor-seat')}
-                className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 rounded-lg font-bold"
-              >
-                Reserve Conductor
-              </button>
-            </div>
-          </div>
-
-          {/* Tool Palette & Legend */}
-          <div className="bg-gray-50 rounded-2xl border border-gray-200 p-3.5 space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setActiveTool('available')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
-                  activeTool === 'available'
-                    ? 'bg-white border-emerald-500 text-emerald-800 ring-2 ring-emerald-200 shadow-xs'
-                    : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
-                }`}
-              >
-                <span className="w-2.5 h-2.5 rounded-full border border-gray-400 bg-white" />
-                <span>Available</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTool('blocked')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
-                  activeTool === 'blocked'
-                    ? 'bg-amber-50 border-amber-500 text-amber-900 ring-2 ring-amber-200 shadow-xs'
-                    : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
-                }`}
-              >
-                <span className="w-2.5 h-2.5 rounded-full bg-gray-900" />
-                <span>Blocked / Crew</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTool('female')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
-                  activeTool === 'female'
-                    ? 'bg-pink-100 border-pink-500 text-pink-900 ring-2 ring-pink-200 shadow-xs'
-                    : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
-                }`}
-              >
-                <span className="w-2.5 h-2.5 rounded-full bg-pink-500" />
-                <span>Female</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTool('male')}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl border flex items-center gap-1.5 transition-all ${
-                  activeTool === 'male'
-                    ? 'bg-blue-100 border-blue-500 text-blue-900 ring-2 ring-blue-200 shadow-xs'
-                    : 'bg-white/70 border-gray-200 text-gray-700 hover:bg-white'
-                }`}
-              >
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                <span>Male</span>
-              </button>
-            </div>
-
-            {/* Real-time Seat Count Counters */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-gray-200/60 text-center">
-              <div className="p-2 bg-white rounded-xl border border-gray-200">
-                <span className="text-[10px] text-gray-500 uppercase font-bold block">Capacity</span>
-                <strong className="text-base text-gray-900 font-mono">{seatStats.total} Seats</strong>
-              </div>
-              <div className="p-2 bg-white rounded-xl border border-emerald-200">
-                <span className="text-[10px] text-emerald-700 uppercase font-bold block">Available</span>
-                <strong className="text-base text-emerald-800 font-mono">{seatStats.available}</strong>
-              </div>
-              <div className="p-2 bg-white rounded-xl border border-amber-200">
-                <span className="text-[10px] text-amber-700 uppercase font-bold block">Blocked / Staff</span>
-                <strong className="text-base text-amber-900 font-mono">{seatStats.blocked}</strong>
-              </div>
-              <div className="p-2 bg-white rounded-xl border border-pink-200">
-                <span className="text-[10px] text-pink-700 uppercase font-bold block">Ladies Reserved</span>
-                <strong className="text-base text-pink-900 font-mono">{seatStats.female}</strong>
-              </div>
+            <div className="flex items-center gap-3 text-xs font-bold text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-md border-2 border-slate-400 bg-white" />
+                <span>Available ({seatStats.available})</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-md bg-[#FEF3C7] border border-amber-400" />
+                <span className="text-amber-700">Blocked ({seatStats.blocked})</span>
+              </span>
             </div>
           </div>
 
@@ -725,6 +604,18 @@ export function DailyRouteBusScheduler({
                 </div>
               </div>
             )}
+
+            {/* Rules & Legend matching frontend */}
+            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-center gap-4 text-[11px] font-bold text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 rounded-md border-2 border-slate-400 bg-white" />
+                <span>Available</span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 rounded-md bg-[#FEF3C7] border border-amber-400" />
+                <span className="text-amber-700">Blocked</span>
+              </span>
+            </div>
           </div>
         </div>
 
