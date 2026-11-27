@@ -482,12 +482,12 @@ export function DailyRouteBusScheduler({
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       {/* Big Font Bus Number */}
-                      <div className="text-base sm:text-lg font-mono font-black text-gray-950 tracking-wider flex items-center gap-1.5">
-                        <Bus size={18} className="text-[#F8B018] shrink-0" />
+                      <div className="text-xl sm:text-2xl font-mono font-black text-gray-950 tracking-wider flex items-center gap-2">
+                        <Bus size={22} className="text-[#F8B018] shrink-0" />
                         <span>{b.busNumber}</span>
                       </div>
-                      <h3 className="font-bold text-xs text-gray-600 mt-1 leading-snug">
-                        {b.busName}
+                      <h3 className="font-bold text-xs text-gray-700 mt-1 leading-snug">
+                        Uday Bus
                       </h3>
                     </div>
 
@@ -776,7 +776,7 @@ export function DailyRouteBusScheduler({
                 <div className="flex flex-wrap items-start justify-between gap-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-base sm:text-lg font-mono font-black text-gray-950 tracking-wider">
+                      <span className="text-lg sm:text-xl font-mono font-black text-gray-950 tracking-wider">
                         {t.busNumber || 'Fleet Vehicle'}
                       </span>
                       {t.templateId && (
@@ -785,8 +785,8 @@ export function DailyRouteBusScheduler({
                         </span>
                       )}
                     </div>
-                    <h4 className="font-semibold text-xs text-gray-600 leading-snug mt-0.5">
-                      {t.busName}
+                    <h4 className="font-bold text-xs text-gray-700 leading-snug mt-0.5">
+                      {t.busName || 'Uday Bus'}
                     </h4>
                   </div>
 

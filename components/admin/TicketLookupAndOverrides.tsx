@@ -228,11 +228,11 @@ export function TicketLookupAndOverrides() {
                         <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-0.5">
                           Bus &amp; Boarding Point
                         </span>
-                        <strong className="text-gray-950 text-base block font-mono font-black tracking-tight">
+                        <strong className="text-gray-950 text-base sm:text-lg block font-mono font-black tracking-wider">
                           {t.busNumber}
                         </strong>
-                        <span className="text-xs text-gray-600 font-semibold block">
-                          {t.busName || 'Uday Bus'}
+                        <span className="text-xs text-gray-700 font-bold block">
+                          Uday Bus
                         </span>
                         <span className="text-amber-800 font-medium block truncate">
                           {t.pickup?.name} ({t.pickup?.pickupTime || '06:00'})

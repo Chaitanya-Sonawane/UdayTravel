@@ -1035,7 +1035,7 @@ export function ManualCounterBooking({
               >
                 {scheduledTrips.map((t) => (
                   <option key={t.tripId} value={t.tripId}>
-                    {t.departureTime} · {t.busNumber} · {t.busName} (₹{t.fare})
+                    {t.departureTime} · {t.busNumber} · Uday Bus (₹{t.fare})
                   </option>
                 ))}
               </select>
@@ -1052,15 +1052,15 @@ export function ManualCounterBooking({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-base sm:text-lg font-mono font-black text-gray-950 tracking-wider">
+                  <span className="text-xl sm:text-2xl font-mono font-black text-gray-950 tracking-wider">
                     {selectedTrip.busNumber}
                   </span>
                   <span className="text-[10px] uppercase font-black px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
                     {template.capacity} Seats · {template.layoutType}
                   </span>
                 </div>
-                <div className="text-xs text-gray-600 font-bold mt-0.5">
-                  {selectedTrip.busName} · Departs {selectedTrip.departureTime} &rarr; Arrives {selectedTrip.arrivalTime}
+                <div className="text-xs text-gray-700 font-bold mt-0.5">
+                  Uday Bus · Departs {selectedTrip.departureTime} &rarr; Arrives {selectedTrip.arrivalTime}
                 </div>
               </div>
             </div>

@@ -336,7 +336,7 @@ export function PassengerManifestDispatch() {
               >
                 {trips.map((t) => (
                   <option key={t.tripId} value={t.tripId}>
-                    {t.departureTime} · {t.busNumber} ({t.busName})
+                    {t.departureTime} · {t.busNumber} (Uday Bus)
                   </option>
                 ))}
               </select>
@@ -363,11 +363,11 @@ export function PassengerManifestDispatch() {
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1">
               Bus &amp; Total Capacity
             </span>
-            <strong className="text-lg font-black text-gray-900 block font-mono">
+            <strong className="text-xl sm:text-2xl font-black text-gray-950 block font-mono tracking-wider">
               {manifestData.busNumber}
             </strong>
-            <span className="text-xs text-gray-500 font-medium">
-              {manifestData.totalSeats} Total Passenger Seats
+            <span className="text-xs font-bold text-gray-700 block mt-0.5">
+              Uday Bus · {manifestData.totalSeats} Total Passenger Seats
             </span>
           </div>
 

@@ -470,7 +470,7 @@ export function RouteWisePassengerSheet() {
               <option value="ALL">All Departures (Full Day)</option>
               {availableTrips.map((t) => (
                 <option key={t.tripId} value={t.tripId}>
-                  {t.departureTime} · {t.busNumber}
+                  {t.departureTime} · {t.busNumber} (Uday Bus)
                 </option>
               ))}
             </select>
@@ -993,7 +993,7 @@ export function RouteWisePassengerSheet() {
                   >
                     {availableTrips.map((t) => (
                       <option key={t.tripId} value={t.tripId}>
-                        {t.departureTime} · {t.busNumber}
+                        {t.departureTime} · {t.busNumber} (Uday Bus)
                       </option>
                     ))}
                   </select>

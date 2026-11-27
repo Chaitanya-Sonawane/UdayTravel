@@ -140,7 +140,7 @@ export async function GET(req: Request) {
 
       tripItems.push({
         tripId,
-        busName: tripData.busName || (totalSeats === 44 ? 'Uday Express 44-Seater (2+2 Layout)' : totalSeats === 33 ? 'Uday Express 33-Seater (2+2 Compact)' : 'Uday Express 55-Seater (2+3 Layout)'),
+        busName: tripData.busName || 'Uday Bus',
         busType: coachLabel,
         busNumber,
         coachLabel,
@@ -196,7 +196,7 @@ export async function GET(req: Request) {
 
         tripItems.push({
           tripId: customTrip.tripId,
-          busName: customTrip.busName || (totalSeats === 44 ? 'Uday Express 44-Seater (2+2 Layout)' : totalSeats === 33 ? 'Uday Express 33-Seater (2+2 Compact)' : 'Uday Express 55-Seater (2+3 Layout)'),
+          busName: customTrip.busName || 'Uday Bus',
           busType: coachLabel,
           busNumber,
           coachLabel,
@@ -253,7 +253,7 @@ export async function GET(req: Request) {
         const busNumber = t.busNumber || (t.totalSeats === 44 || t.busId === 'bus_mh16dv1003' ? 'MH 16 DV 1003' : t.totalSeats === 33 || t.busId === 'bus_mh16dp3951' ? 'MH 16 DP 3951' : 'MH 16 DP 4951')
         const coachLabel = t.coachLabel || (t.totalSeats === 44 ? '2+2 Coach (44 Seats)' : t.totalSeats === 33 ? '2+2 Coach (33 Seats)' : '2+3 Coach (55 Seats)')
         const layoutType = (t.seatLayout && t.seatLayout.includes('2+3')) || t.totalSeats === 55 ? '2+3' : '2+2'
-        const busName = t.busName || (t.totalSeats === 44 ? 'Uday Express 44-Seater (2+2 Layout)' : t.totalSeats === 33 ? 'Uday Express 33-Seater (2+2 Compact)' : 'Uday Express 55-Seater (2+3 Layout)')
+        const busName = t.busName || 'Uday Bus'
 
         tripItems.push({
           tripId: t.tripId || t.id,
