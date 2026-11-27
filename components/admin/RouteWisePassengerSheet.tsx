@@ -16,19 +16,18 @@ import {
   AlertCircle,
   Bus,
   Calendar,
-  CheckSquare,
-  Square,
+  Check,
+  Circle,
   ChevronRight,
   Filter,
   Users,
-  ShieldCheck,
-  ExternalLink,
-  X,
   UserCheck,
   Clock4,
   ArrowRight,
   Sparkles,
-  Banknote,
+  X,
+  ExternalLink,
+  SlidersHorizontal,
 } from 'lucide-react'
 import { RouteId, ROUTES } from '@/lib/config/routes'
 import { todayIST } from '@/lib/time/ist'
@@ -38,6 +37,7 @@ import {
   PUNE_PICKUP_RAW,
 } from '@/lib/routes/seed-data'
 import { RoutePassengerRecord, StopCountBreakdown } from '@/app/api/admin/route-passengers/route'
+import { ThemedDatePickerModal } from '@/components/ui/ThemedDatePickerModal'
 
 function formatISTTime(isoString: string): string {
   try {
@@ -53,36 +53,45 @@ function formatISTTime(isoString: string): string {
   }
 }
 
-function formatTimeAgo(isoString: string): string {
+function formatDisplayDate(dateStr: string): string {
   try {
-    const ms = Date.now() - new Date(isoString).getTime()
-    if (ms < 0) return 'Just now'
-    const mins = Math.floor(ms / 60000)
-    if (mins < 60) return `${mins}m ago`
-    const hours = Math.floor(mins / 60)
-    if (hours < 24) return `${hours}h ago`
-    return `${Math.floor(hours / 24)}d ago`
+    const d = new Date(dateStr + 'T00:00:00')
+    return new Intl.DateTimeFormat('en-IN', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+    }).format(d)
   } catch {
-    return ''
+    return dateStr
   }
 }
 
 export function RouteWisePassengerSheet() {
+  // Route selection: separate booking list for each route
   const [selectedRoute, setSelectedRoute] = useState<RouteId>('AHM_PUN')
   const [selectedDate, setSelectedDate] = useState<string>(todayIST())
   const [selectedTripId, setSelectedTripId] = useState<string>('ALL')
   const [availableTrips, setAvailableTrips] = useState<any[]>([])
 
-  // Data state
+  // Passenger data state
   const [loading, setLoading] = useState(false)
   const [passengers, setPassengers] = useState<RoutePassengerRecord[]>([])
   const [stopBreakdown, setStopBreakdown] = useState<StopCountBreakdown[]>([])
+  const [otherRouteCount, setOtherRouteCount] = useState<number>(0)
+  const [otherRouteBoarded, setOtherRouteBoarded] = useState<number>(0)
+
+  // Filters & search
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'PENDING' | 'BOARDED'>('ALL')
   const [filterStop, setFilterStop] = useState<string>('ALL')
-  const [actionNotice, setActionNotice] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const [groupByStop, setGroupByStop] = useState(false)
+  const [calendarOpen, setCalendarOpen] = useState(false)
 
-  // Add passenger modal state (Modal replaces cluttered inline form)
+  // Notifications & UI state
+  const [actionNotice, setActionNotice] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const [togglingSeat, setTogglingSeat] = useState<string | null>(null)
+
+  // Add passenger modal state
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [savingPassenger, setSavingPassenger] = useState(false)
   const [newName, setNewName] = useState('')
@@ -95,8 +104,9 @@ export function RouteWisePassengerSheet() {
   const [newTripId, setNewTripId] = useState('')
 
   const isAhmPun = selectedRoute === 'AHM_PUN'
+  const today = todayIST()
 
-  // Canonical stops for selected route
+  // Canonical stops for current route
   const pickupStops = useMemo(
     () => (isAhmPun ? AHILYANAGAR_PICKUP_RAW : PUNE_PICKUP_RAW),
     [isAhmPun]
@@ -112,7 +122,7 @@ export function RouteWisePassengerSheet() {
     if (dropStops.length > 0) setNewDrop(dropStops[0]!)
   }, [pickupStops, dropStops])
 
-  // 1. Fetch available trips for selected route & date
+  // 1. Fetch available departures for selected route & date
   const fetchTrips = useCallback(async () => {
     try {
       const res = await fetch(`/api/admin/schedule?route=${selectedRoute}&date=${selectedDate}`)
@@ -123,7 +133,7 @@ export function RouteWisePassengerSheet() {
         setNewTripId(list[0].tripId)
       }
     } catch {
-      // Safe catch for departures fetch
+      // Safe catch
     }
   }, [selectedRoute, selectedDate, newTripId])
 
@@ -132,33 +142,48 @@ export function RouteWisePassengerSheet() {
   }, [fetchTrips])
 
   // 2. Fetch route passengers in route-wise sorted order
-  const fetchRoutePassengers = useCallback(async (isBackground = false) => {
-    if (!isBackground) {
-      setLoading(true)
-      setActionNotice(null)
-    }
-    try {
-      const tripParam = selectedTripId !== 'ALL' ? `&tripId=${selectedTripId}` : ''
-      const res = await fetch(
-        `/api/admin/route-passengers?route=${selectedRoute}&date=${selectedDate}${tripParam}`
-      )
-      const data = await res.json()
-      if (data.success) {
-        setPassengers(data.passengers || [])
-        setStopBreakdown(data.stopBreakdown || [])
-      } else {
-        throw new Error(data.error || 'Failed to load route passengers')
-      }
-    } catch (err: any) {
+  const fetchRoutePassengers = useCallback(
+    async (isBackground = false) => {
       if (!isBackground) {
-        setActionNotice({ type: 'error', text: err.message || 'Error fetching route passengers' })
+        setLoading(true)
+        setActionNotice(null)
       }
-    } finally {
-      if (!isBackground) {
-        setLoading(false)
+      try {
+        const tripParam = selectedTripId !== 'ALL' ? `&tripId=${selectedTripId}` : ''
+        const res = await fetch(
+          `/api/admin/route-passengers?route=${selectedRoute}&date=${selectedDate}${tripParam}`
+        )
+        const data = await res.json()
+        if (data.success) {
+          setPassengers(data.passengers || [])
+          setStopBreakdown(data.stopBreakdown || [])
+        }
+
+        // Fetch counts for other route in background to keep tab badges synchronized
+        const otherRoute: RouteId = selectedRoute === 'AHM_PUN' ? 'PUN_AHM' : 'AHM_PUN'
+        fetch(`/api/admin/route-passengers?route=${otherRoute}&date=${selectedDate}`)
+          .then((r) => r.json())
+          .then((otherData) => {
+            if (otherData?.passengers) {
+              setOtherRouteCount(otherData.passengers.length)
+              setOtherRouteBoarded(
+                otherData.passengers.filter((p: RoutePassengerRecord) => p.boarded).length
+              )
+            }
+          })
+          .catch(() => {})
+      } catch (err: any) {
+        if (!isBackground) {
+          setActionNotice({ type: 'error', text: err.message || 'Error loading booking list' })
+        }
+      } finally {
+        if (!isBackground) {
+          setLoading(false)
+        }
       }
-    }
-  }, [selectedRoute, selectedDate, selectedTripId])
+    },
+    [selectedRoute, selectedDate, selectedTripId]
+  )
 
   useEffect(() => {
     fetchRoutePassengers()
@@ -214,7 +239,6 @@ export function RouteWisePassengerSheet() {
       setNewSeat('')
       setIsModalOpen(false)
 
-      // Refresh list
       await fetchRoutePassengers()
     } catch (err: any) {
       setActionNotice({ type: 'error', text: err.message || 'Error saving passenger' })
@@ -223,8 +247,27 @@ export function RouteWisePassengerSheet() {
     }
   }
 
-  // 4. Toggle Boarding status
-  const handleToggleBoarding = async (tripId: string, seatNo: string, currentStatus: boolean) => {
+  // 4. Toggle Boarding status (The Hero "Tick" Action)
+  const handleToggleBoarding = async (
+    tripId: string,
+    seatNo: string,
+    ticketNo: string,
+    currentStatus: boolean,
+    passengerName: string,
+    pickupStopName: string
+  ) => {
+    const nextStatus = !currentStatus
+    setTogglingSeat(seatNo)
+
+    // Optimistic UI update
+    setPassengers((prev) =>
+      prev.map((p) =>
+        p.tripId === tripId && p.seatNo === seatNo
+          ? { ...p, boarded: nextStatus, boardedAt: nextStatus ? new Date().toISOString() : undefined }
+          : p
+      )
+    )
+
     try {
       const res = await fetch('/api/admin/manifest', {
         method: 'PATCH',
@@ -233,32 +276,42 @@ export function RouteWisePassengerSheet() {
           tripId,
           travelDate: selectedDate,
           seatNo,
-          boarded: !currentStatus,
+          ticketNo,
+          boarded: nextStatus,
         }),
       })
-      if (res.ok) {
+
+      if (!res.ok) {
+        // Rollback if failed
         setPassengers((prev) =>
           prev.map((p) =>
-            p.tripId === tripId && p.seatNo === seatNo ? { ...p, boarded: !currentStatus } : p
+            p.tripId === tripId && p.seatNo === seatNo ? { ...p, boarded: currentStatus } : p
           )
         )
+        setActionNotice({ type: 'error', text: 'Could not update boarding status. Please retry.' })
+      } else {
+        setActionNotice({
+          type: 'success',
+          text: nextStatus
+            ? `✓ ${passengerName} marked as BOARDED properly from ${pickupStopName}!`
+            : `Reverted ${passengerName} to Pending.`,
+        })
       }
     } catch {
-      // Ignored
+      // Rollback on network error
+      setPassengers((prev) =>
+        prev.map((p) =>
+          p.tripId === tripId && p.seatNo === seatNo ? { ...p, boarded: currentStatus } : p
+        )
+      )
+      setActionNotice({ type: 'error', text: 'Network error updating boarding status.' })
+    } finally {
+      setTogglingSeat(null)
     }
   }
 
-  // Active stops that actually have passenger bookings (eliminates zero-passenger button clutter)
-  const activeBookedStops = useMemo(() => {
-    return stopBreakdown.filter((s) => s.count > 0)
-  }, [stopBreakdown])
-
-  // Key metrics for executive glance
+  // Key metrics for this route
   const totalCount = passengers.length
-  const totalFareCollected = useMemo(
-    () => passengers.reduce((sum, p) => sum + (p.fare || 0), 0),
-    [passengers]
-  )
   const boardedCount = useMemo(() => passengers.filter((p) => p.boarded).length, [passengers])
   const pendingCount = totalCount - boardedCount
   const boardingPct = totalCount > 0 ? Math.round((boardedCount / totalCount) * 100) : 0
@@ -289,126 +342,99 @@ export function RouteWisePassengerSheet() {
     })
   }, [passengers, statusFilter, filterStop, searchQuery])
 
-  // Export to CSV
+  // Grouped passengers by pickup stop
+  const groupedByStopList = useMemo(() => {
+    const groups: { stopName: string; sequence: number; time: string; list: RoutePassengerRecord[] }[] = []
+    const map = new Map<string, RoutePassengerRecord[]>()
+
+    filteredPassengers.forEach((p) => {
+      if (!map.has(p.pickupStop)) {
+        map.set(p.pickupStop, [])
+      }
+      map.get(p.pickupStop)!.push(p)
+    })
+
+    map.forEach((list, stopName) => {
+      const first = list[0]
+      groups.push({
+        stopName,
+        sequence: first?.pickupSequence || 999,
+        time: first?.pickupTime || '',
+        list,
+      })
+    })
+
+    groups.sort((a, b) => a.sequence - b.sequence)
+    return groups
+  }, [filteredPassengers])
+
+  // Active stops that have bookings
+  const activeBookedStops = useMemo(() => {
+    return stopBreakdown.filter((s) => s.count > 0)
+  }, [stopBreakdown])
+
+  // CSV Export
   const handleExportCSV = () => {
     if (passengers.length === 0) {
       alert('No passengers to export.')
       return
     }
 
-    const headers = [
-      'Sr No',
-      'Name',
-      'Phone Number',
-      'Pickup Stop',
-      'Pickup Sequence',
-      'Pickup Time',
-      'Drop Stop',
-      'Seat No',
-      'Ticket No',
-      'Departure',
-      'Bus Number',
-      'Fare (INR)',
-      'Boarded',
-    ]
-
+    const headers = ['Sr No', 'Name', 'Pickup Point', 'Number', 'Seat', 'Boarded Status', 'Boarded At']
     const rows = passengers.map((p) => [
       p.srNo,
       `"${p.name.replace(/"/g, '""')}"`,
+      `"${p.pickupStop} (${p.pickupTime})"`,
       `"${p.mobile}"`,
-      `"${p.pickupStop}"`,
-      p.pickupSequence,
-      `"${p.pickupTime}"`,
-      `"${p.dropStop}"`,
       `"${p.seatNo}"`,
-      `"${p.ticketNo}"`,
-      `"${p.departureTime}"`,
-      `"${p.busNumber}"`,
-      p.fare,
-      p.boarded ? 'YES' : 'NO',
+      p.boarded ? 'BOARDED' : 'PENDING',
+      p.boardedAt ? `"${formatISTTime(p.boardedAt)}"` : '""',
     ])
 
     const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map((e) => e.join(','))].join('\n')
-
+      'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n')
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement('a')
     link.setAttribute('href', encodedUri)
-    link.setAttribute(
-      'download',
-      `Uday_Travels_Route_${selectedRoute}_${selectedDate}.csv`
-    )
+    link.setAttribute('download', `Uday_Travels_${selectedRoute}_${selectedDate}_Boarding_List.csv`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
   }
 
-  // Print Route Sheet
-  const handlePrint = () => {
-    window.print()
-  }
-
   return (
     <div className="space-y-5">
-      {/* 1. Sleek Route & Date Control Bar */}
-      <section className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4 print:hidden">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Route Segmented Switcher */}
-          <div className="flex items-center gap-2">
-            <div className="inline-flex p-1 bg-gray-100 rounded-xl border border-gray-200">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRoute('AHM_PUN')
-                  setFilterStop('ALL')
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                  selectedRoute === 'AHM_PUN'
-                    ? 'bg-[#F8B018] text-gray-950 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <span>Ahilyanagar &rarr; Pune</span>
-                <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-md font-mono">
-                  20 stops
-                </span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRoute('PUN_AHM')
-                  setFilterStop('ALL')
-                }}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all ${
-                  selectedRoute === 'PUN_AHM'
-                    ? 'bg-[#F8B018] text-gray-950 shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <span>Pune &rarr; Ahilyanagar</span>
-                <span className="text-[10px] bg-black/10 px-1.5 py-0.2 rounded-md font-mono">
-                  11 stops
-                </span>
-              </button>
+      {/* ------------------------------------------------------------- */}
+      {/* 1. SEPARATE BOOKING LIST ROUTE SELECTOR TABS */}
+      {/* ------------------------------------------------------------- */}
+      <section className="bg-white border border-gray-200 rounded-3xl p-4 sm:p-6 shadow-xs space-y-4 print:hidden">
+        {/* Top Header & Date Row */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[11px] font-black uppercase tracking-wider text-emerald-800">
+                Route Passenger Boarding System
+              </span>
             </div>
+            <h2 className="text-xl sm:text-2xl font-black text-gray-950 tracking-tight mt-0.5">
+              Passenger Boarding Checklist
+            </h2>
           </div>
 
-          {/* Quick Date & Trip Selectors */}
+          {/* Quick Date Pills & Trip Filter */}
           <div className="flex flex-wrap items-center gap-2">
-            {/* Quick Date Pills */}
             <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 text-xs">
               <button
                 type="button"
-                onClick={() => setSelectedDate(todayIST())}
-                className={`px-2.5 py-1 rounded-lg font-bold transition-colors ${
-                  selectedDate === todayIST()
-                    ? 'bg-gray-900 text-white shadow-xs'
+                onClick={() => setSelectedDate(today)}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                  selectedDate === today
+                    ? 'bg-[#F8B018] text-[#0B0F19] shadow-xs'
                     : 'text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                Today
+                Today ({formatDisplayDate(today)})
               </button>
               <button
                 type="button"
@@ -417,27 +443,29 @@ export function RouteWisePassengerSheet() {
                   d.setDate(d.getDate() + 1)
                   setSelectedDate(d.toISOString().slice(0, 10))
                 }}
-                className={`px-2.5 py-1 rounded-lg font-bold transition-colors ${
-                  selectedDate !== todayIST()
-                    ? 'bg-gray-900 text-white shadow-xs'
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                  selectedDate !== today
+                    ? 'bg-[#F8B018] text-[#0B0F19] shadow-xs'
                     : 'text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 Tomorrow
               </button>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent border-0 px-1 py-0.5 text-xs font-mono font-bold text-gray-800 focus:outline-none"
-              />
+              <button
+                type="button"
+                onClick={() => setCalendarOpen(true)}
+                className="p-1.5 bg-white hover:bg-gray-100 text-gray-700 rounded-lg border border-gray-200"
+                title="Choose custom date"
+              >
+                <Calendar size={15} />
+              </button>
             </div>
 
             {/* Departure Filter */}
             <select
               value={selectedTripId}
               onChange={(e) => setSelectedTripId(e.target.value)}
-              className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold text-gray-800 bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
+              className="px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-800 bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
             >
               <option value="ALL">All Departures (Full Day)</option>
               {availableTrips.map((t) => (
@@ -447,40 +475,40 @@ export function RouteWisePassengerSheet() {
               ))}
             </select>
 
-            {/* Primary Action: Add Passenger Modal Trigger */}
+            {/* Add Passenger Button */}
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#F8B018] hover:bg-[#e5a013] text-gray-950 text-xs font-black rounded-xl shadow-xs transition-transform active:scale-95"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#F8B018] hover:bg-[#e5a013] text-gray-950 text-xs font-black rounded-xl shadow-xs transition-transform active:scale-95 cursor-pointer"
             >
               <UserPlus size={14} />
               <span>+ Add Passenger</span>
             </button>
 
-            {/* Utility Actions */}
+            {/* Actions */}
             <div className="flex items-center gap-1 border-l border-gray-200 pl-2">
               <button
                 type="button"
                 onClick={() => fetchRoutePassengers()}
                 disabled={loading}
-                title="Refresh passengers list"
-                className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                title="Refresh passengers"
+                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-colors cursor-pointer"
               >
                 <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
               </button>
               <button
                 type="button"
-                onClick={handlePrint}
-                title="Print official passenger boarding sheet"
-                className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                onClick={() => window.print()}
+                title="Print checklist"
+                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-colors cursor-pointer"
               >
                 <Printer size={14} />
               </button>
               <button
                 type="button"
                 onClick={handleExportCSV}
-                title="Export CSV sheet"
-                className="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+                title="Download CSV"
+                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl transition-colors cursor-pointer"
               >
                 <Download size={14} />
               </button>
@@ -488,10 +516,127 @@ export function RouteWisePassengerSheet() {
           </div>
         </div>
 
-        {/* Action Notice Notification Banner */}
+        {/* Dedicated Route Tabs with High-Impact Badges */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          {/* Route 1: Ahilyanagar to Pune */}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedRoute('AHM_PUN')
+              setFilterStop('ALL')
+            }}
+            className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+              selectedRoute === 'AHM_PUN'
+                ? 'bg-amber-50/70 border-amber-400 ring-2 ring-amber-300 shadow-sm'
+                : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/80'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${
+                    selectedRoute === 'AHM_PUN' ? 'bg-[#F8B018] text-[#0B0F19]' : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  <Bus size={18} />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-amber-900 block">
+                    Route 1 · 20 Stops
+                  </span>
+                  <h3 className="text-base font-black text-gray-950">
+                    Ahilyanagar → Pune
+                  </h3>
+                </div>
+              </div>
+
+              {/* Status Badge */}
+              <div className="text-right">
+                <span
+                  className={`text-xs font-mono font-black px-2.5 py-1 rounded-lg border ${
+                    selectedRoute === 'AHM_PUN'
+                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                      : 'bg-gray-100 text-gray-700 border-gray-200'
+                  }`}
+                >
+                  {selectedRoute === 'AHM_PUN' ? totalCount : otherRouteCount} Booked
+                </span>
+                <span className="block text-[11px] font-bold text-gray-500 mt-0.5">
+                  ✓ {selectedRoute === 'AHM_PUN' ? boardedCount : otherRouteBoarded} Boarded
+                </span>
+              </div>
+            </div>
+
+            {selectedRoute === 'AHM_PUN' && (
+              <div className="mt-3 pt-2 border-t border-amber-200/60 flex items-center justify-between text-[11px] font-bold text-amber-950">
+                <span>Active Booking List</span>
+                <span className="text-emerald-700">● Live Real-Time Checklist</span>
+              </div>
+            )}
+          </button>
+
+          {/* Route 2: Pune to Ahilyanagar */}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedRoute('PUN_AHM')
+              setFilterStop('ALL')
+            }}
+            className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+              selectedRoute === 'PUN_AHM'
+                ? 'bg-amber-50/70 border-amber-400 ring-2 ring-amber-300 shadow-sm'
+                : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50/80'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${
+                    selectedRoute === 'PUN_AHM' ? 'bg-[#F8B018] text-[#0B0F19]' : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  <Bus size={18} />
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-mono font-bold tracking-wider text-amber-900 block">
+                    Route 2 · 11 Stops
+                  </span>
+                  <h3 className="text-base font-black text-gray-950">
+                    Pune → Ahilyanagar
+                  </h3>
+                </div>
+              </div>
+
+              {/* Status Badge */}
+              <div className="text-right">
+                <span
+                  className={`text-xs font-mono font-black px-2.5 py-1 rounded-lg border ${
+                    selectedRoute === 'PUN_AHM'
+                      ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                      : 'bg-gray-100 text-gray-700 border-gray-200'
+                  }`}
+                >
+                  {selectedRoute === 'PUN_AHM' ? totalCount : otherRouteCount} Booked
+                </span>
+                <span className="block text-[11px] font-bold text-gray-500 mt-0.5">
+                  ✓ {selectedRoute === 'PUN_AHM' ? boardedCount : otherRouteBoarded} Boarded
+                </span>
+              </div>
+            </div>
+
+            {selectedRoute === 'PUN_AHM' && (
+              <div className="mt-3 pt-2 border-t border-amber-200/60 flex items-center justify-between text-[11px] font-bold text-amber-950">
+                <span>Active Booking List</span>
+                <span className="text-emerald-700">● Live Real-Time Checklist</span>
+              </div>
+            )}
+          </button>
+        </div>
+
+        {/* Action Notice Toast */}
         {actionNotice && (
           <div
-            className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in ${
+            className={`p-3 rounded-xl text-xs font-bold flex items-center justify-between gap-2 animate-in fade-in ${
               actionNotice.type === 'success'
                 ? 'bg-emerald-50 text-emerald-900 border border-emerald-200'
                 : 'bg-red-50 text-red-900 border border-red-200'
@@ -499,16 +644,16 @@ export function RouteWisePassengerSheet() {
           >
             <div className="flex items-center gap-2">
               {actionNotice.type === 'success' ? (
-                <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+                <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
               ) : (
-                <AlertCircle size={15} className="text-red-600 shrink-0" />
+                <AlertCircle size={16} className="text-red-600 shrink-0" />
               )}
               <span>{actionNotice.text}</span>
             </div>
             <button
               type="button"
               onClick={() => setActionNotice(null)}
-              className="text-gray-400 hover:text-gray-700"
+              className="text-gray-400 hover:text-gray-700 p-0.5"
             >
               <X size={14} />
             </button>
@@ -516,450 +661,239 @@ export function RouteWisePassengerSheet() {
         )}
       </section>
 
-      {/* 2. Executive High-Level KPI Strip (Crisp & Minimal) */}
-      <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 print:hidden">
-        {/* Total Booked */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-3.5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 flex items-center justify-center font-black shrink-0">
-            <Users size={18} />
-          </div>
-          <div>
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-              Route Passengers
-            </span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black text-gray-900">{totalCount}</span>
-              <span className="text-[11px] text-gray-500">Booked</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Total Paid Revenue */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-3.5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center font-black shrink-0">
-            <Banknote size={18} />
-          </div>
-          <div>
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-              Total Paid
-            </span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black text-gray-900">₹{totalFareCollected}</span>
-              <span className="text-[11px] text-emerald-700 font-bold">Collected</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Boarded Count & Progress */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-3.5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black shrink-0">
-            <UserCheck size={18} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-                Boarded
-              </span>
-              <span className="text-[10px] font-mono font-bold text-emerald-700">
-                {boardingPct}%
-              </span>
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black text-emerald-700">{boardedCount}</span>
-              <span className="text-[11px] text-gray-500">of {totalCount}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Pending Check-in */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-3.5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center font-black shrink-0">
-            <Clock4 size={18} />
-          </div>
-          <div>
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-              Pending Boarding
-            </span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black text-amber-700">{pendingCount}</span>
-              <span className="text-[11px] text-gray-500">at stops</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Active Route Stops */}
-        <div className="bg-white border border-gray-200 rounded-2xl p-3.5 shadow-xs flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-black shrink-0">
-            <MapPin size={18} />
-          </div>
-          <div>
-            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
-              Active Pickups
-            </span>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-black text-gray-900">
-                {activeBookedStops.length}
-              </span>
-              <span className="text-[11px] text-gray-500">
-                of {pickupStops.length} stops
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 3. Decluttered Active Stop Chips & Search Toolbar */}
-      <section className="bg-white border border-gray-200 rounded-2xl p-3.5 sm:p-4 shadow-xs space-y-3 print:hidden">
-        {/* Top Filter Row: Status Tabs + Search */}
+      {/* ------------------------------------------------------------- */}
+      {/* 2. LIVE BOARDING SUMMARY & PROGRESS BAR */}
+      {/* ------------------------------------------------------------- */}
+      <section className="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs print:hidden space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Status Tabs */}
-          <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setStatusFilter('ALL')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                statusFilter === 'ALL'
-                  ? 'bg-white text-gray-950 shadow-xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              All ({totalCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('PENDING')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                statusFilter === 'PENDING'
-                  ? 'bg-amber-100 text-amber-950 shadow-xs font-black'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Pending ({pendingCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter('BOARDED')}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                statusFilter === 'BOARDED'
-                  ? 'bg-emerald-100 text-emerald-950 shadow-xs font-black'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              Boarded ({boardedCount})
-            </button>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black shrink-0">
+              <UserCheck size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-black text-gray-950">
+                  {boardedCount} of {totalCount} Passengers Boarded
+                </span>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  {boardingPct}% Complete
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 font-medium">
+                {pendingCount === 0 && totalCount > 0
+                  ? 'All passengers have safely boarded! Ready for departure.'
+                  : `${pendingCount} passengers remaining to board along route.`}
+              </p>
+            </div>
           </div>
 
-          {/* Quick Search */}
-          <div className="relative flex-1 max-w-xs">
-            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          {/* Quick Filters */}
+          <div className="flex items-center gap-1.5 self-start sm:self-auto">
+            <div className="flex items-center bg-gray-100 p-1 rounded-xl text-xs font-bold">
+              <button
+                type="button"
+                onClick={() => setStatusFilter('ALL')}
+                className={`px-3 py-1 rounded-lg transition-all ${
+                  statusFilter === 'ALL'
+                    ? 'bg-white text-gray-950 shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                All ({totalCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('BOARDED')}
+                className={`px-3 py-1 rounded-lg transition-all ${
+                  statusFilter === 'BOARDED'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Boarded ({boardedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setStatusFilter('PENDING')}
+                className={`px-3 py-1 rounded-lg transition-all ${
+                  statusFilter === 'PENDING'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Pending ({pendingCount})
+              </button>
+            </div>
+
+            {/* Toggle Grouping */}
+            <button
+              type="button"
+              onClick={() => setGroupByStop((prev) => !prev)}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                groupByStop
+                  ? 'bg-gray-900 text-white border-gray-900 shadow-xs'
+                  : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
+              }`}
+              title="Toggle grouping by pickup stop"
+            >
+              <SlidersHorizontal size={13} />
+              <span className="hidden sm:inline">{groupByStop ? 'Grouped by Stop' : 'Flat List'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Progress Fill Bar */}
+        <div className="w-full h-2 rounded-full bg-gray-100 overflow-hidden">
+          <div
+            className="h-full bg-emerald-500 transition-all duration-300 rounded-full"
+            style={{ width: `${boardingPct}%` }}
+          />
+        </div>
+
+        {/* Search Bar & Stop Filter */}
+        <div className="pt-2 flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search name, phone, seat, stop..."
-              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
+              placeholder="Search by passenger name, mobile number, or pickup point..."
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white text-gray-900 font-medium focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                <X size={12} />
+                <X size={13} />
               </button>
             )}
           </div>
-        </div>
 
-        {/* Active Stops Quick-Pills (Decluttered: displays stops that actually have passengers) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pt-1 pb-1 scrollbar-thin">
-          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-            <MapPin size={11} />
-            Pickups:
-          </span>
+          {/* Active Stop Pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-thin">
+            <button
+              type="button"
+              onClick={() => setFilterStop('ALL')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-all ${
+                filterStop === 'ALL'
+                  ? 'bg-gray-900 text-white shadow-xs'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              All Stops
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setFilterStop('ALL')}
-            className={`px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 transition-all ${
-              filterStop === 'ALL'
-                ? 'bg-gray-900 text-white shadow-xs'
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-            }`}
-          >
-            All Active Stops
-          </button>
-
-          {activeBookedStops.length === 0 ? (
-            <span className="text-xs text-gray-400 italic">No passengers booked along route yet</span>
-          ) : (
-            activeBookedStops.map((sb) => {
+            {activeBookedStops.map((sb) => {
               const isSelected = filterStop === sb.stopName
               return (
                 <button
                   key={sb.stopName}
                   type="button"
                   onClick={() => setFilterStop(isSelected ? 'ALL' : sb.stopName)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 border ${
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 border cursor-pointer ${
                     isSelected
                       ? 'bg-[#FEF3C7] border-[#F8B018] text-amber-950 shadow-xs'
                       : 'bg-amber-50/70 border-amber-200 text-amber-900 hover:bg-amber-100'
                   }`}
                 >
-                  <span className="text-[10px] font-mono text-gray-500 font-normal">
-                    #{sb.sequence}
-                  </span>
+                  <span className="text-[10px] font-mono text-gray-500 font-normal">#{sb.sequence}</span>
                   <span>{sb.stopName}</span>
                   <span className="w-4 h-4 rounded-full bg-emerald-600 text-white text-[10px] flex items-center justify-center font-bold">
                     {sb.count}
                   </span>
                 </button>
               )
-            })
-          )}
-
-          {/* Fallback stop selector dropdown if user needs to inspect a zero-passenger stop */}
-          <div className="ml-auto shrink-0">
-            <select
-              value={filterStop}
-              onChange={(e) => setFilterStop(e.target.value)}
-              className="text-[11px] py-1 px-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-700 focus:outline-none"
-            >
-              <option value="ALL">Browse all {pickupStops.length} stops...</option>
-              {pickupStops.map((s, idx) => (
-                <option key={s.name} value={s.name}>
-                  Stop #{idx + 1} · {s.name} ({s.time})
-                </option>
-              ))}
-            </select>
+            })}
           </div>
         </div>
       </section>
 
-      {/* 4. Professional Route-Wise Sorted Passenger Table */}
-      <section className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-xs">
-        {/* Printable Official Header (Visible only when printed) */}
-        <div className="hidden print:block p-6 border-b border-gray-300 text-center">
+      {/* ------------------------------------------------------------- */}
+      {/* 3. MODERN PASSENGER BOARDING CHECKLIST (INSTEAD OF EXCEL TABLE) */}
+      {/* Returns ONLY: Sr No, Name, Pickup point, Number, and Tick      */}
+      {/* ------------------------------------------------------------- */}
+      <section className="space-y-3">
+        {/* Printable Header */}
+        <div className="hidden print:block p-4 border-b border-gray-300 text-center mb-4">
           <h1 className="text-xl font-black uppercase tracking-wider text-gray-900">
-            Uday Travels — Route Passenger Boarding Manifest
+            Uday Travels — {ROUTES[selectedRoute].name} Boarding Checklist
           </h1>
           <p className="text-xs text-gray-600 mt-1">
-            Route: {ROUTES[selectedRoute].name} | Travel Date: {selectedDate}
+            Travel Date: {selectedDate} | Total Passengers: {filteredPassengers.length}
           </p>
         </div>
 
-        {/* Table Toolbar Status Info */}
-        <div className="px-4 py-2.5 bg-gray-50/80 border-b border-gray-200 flex items-center justify-between text-xs text-gray-600">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-gray-900">
-              {filteredPassengers.length} {filteredPassengers.length === 1 ? 'Passenger' : 'Passengers'}
-            </span>
-          </div>
-          {filterStop !== 'ALL' && (
-            <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded text-[11px] font-bold">
-              Filtered: {filterStop}
-            </span>
-          )}
-        </div>
-
-        {/* Table Data */}
+        {/* Loading State */}
         {loading ? (
-          <div className="py-16 text-center text-xs text-gray-400 flex flex-col items-center gap-2 font-medium">
-            <RefreshCw size={22} className="animate-spin text-[#F8B018]" />
-            <span>Loading route passenger sheet...</span>
+          <div className="bg-white border border-gray-200 rounded-3xl p-16 text-center text-xs text-gray-400 flex flex-col items-center gap-2 font-medium">
+            <RefreshCw size={24} className="animate-spin text-[#F8B018]" />
+            <span>Loading separate booking list for {ROUTES[selectedRoute].name}...</span>
           </div>
         ) : filteredPassengers.length === 0 ? (
-          <div className="py-16 text-center text-xs text-gray-500 space-y-3">
+          <div className="bg-white border border-gray-200 rounded-3xl p-16 text-center text-xs text-gray-500 space-y-3 shadow-xs">
             <div className="w-12 h-12 rounded-2xl bg-gray-100 text-gray-400 flex items-center justify-center mx-auto">
               <Users size={24} />
             </div>
             <div>
-              <strong className="block text-gray-800 text-sm">No passengers match current filter</strong>
-              <p className="text-gray-400 max-w-sm mx-auto mt-0.5">
-                No bookings found for {ROUTES[selectedRoute].name} on {selectedDate}.
+              <strong className="block text-gray-900 text-base font-black">
+                No Bookings for {ROUTES[selectedRoute].name}
+              </strong>
+              <p className="text-gray-500 max-w-sm mx-auto mt-1">
+                No passengers booked on this route for {selectedDate}. Use the button below to add a walk-in passenger.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#F8B018] hover:bg-[#e5a013] text-gray-950 font-bold rounded-xl text-xs transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#F8B018] hover:bg-[#e5a013] text-gray-950 font-bold rounded-xl text-xs transition-colors cursor-pointer"
             >
-              <UserPlus size={13} />
-              <span>+ Add Passenger Now</span>
+              <UserPlus size={14} />
+              <span>+ Add Walk-in Passenger</span>
             </button>
           </div>
+        ) : groupByStop ? (
+          // GROUPED BY PICKUP STOP VIEW
+          <div className="space-y-5">
+            {groupedByStopList.map((group) => (
+              <div key={group.stopName} className="space-y-2">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-mono font-black flex items-center justify-center">
+                    #{group.sequence}
+                  </div>
+                  <h4 className="text-sm font-black text-gray-900 flex items-center gap-2">
+                    <span>{group.stopName}</span>
+                    <span className="text-xs font-mono font-medium text-gray-500">
+                      ({group.time})
+                    </span>
+                  </h4>
+                  <span className="text-xs font-bold text-gray-500 ml-auto">
+                    {group.list.length} {group.list.length === 1 ? 'Passenger' : 'Passengers'}
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  {group.list.map((p) => renderPassengerCard(p))}
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-200 text-gray-500 font-bold uppercase tracking-wider text-[10px]">
-                  <th className="py-2.5 px-3 text-center w-12">Sr.</th>
-                  <th className="py-2.5 px-3">Passenger</th>
-                  <th className="py-2.5 px-3">Contact</th>
-                  <th className="py-2.5 px-3">
-                    <span className="text-amber-900 font-black">Pickup (Route Order)</span>
-                  </th>
-                  <th className="py-2.5 px-3">Drop Stop</th>
-                  <th className="py-2.5 px-3 text-center">Seat</th>
-                  <th className="py-2.5 px-3">PNR</th>
-                  <th className="py-2.5 px-3">Paid &amp; Booked Time</th>
-                  <th className="py-2.5 px-3">Departure</th>
-                  <th className="py-2.5 px-3 text-center">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 font-sans">
-                {filteredPassengers.map((p) => {
-                  return (
-                    <tr
-                      key={`${p.ticketNo}_${p.seatNo}`}
-                      className={`transition-colors ${
-                        p.boarded
-                          ? 'bg-emerald-50/30 hover:bg-emerald-50/60'
-                          : 'hover:bg-amber-50/20'
-                      }`}
-                    >
-                      {/* Sr No */}
-                      <td className="py-3 px-3 text-center">
-                        <span className="w-6 h-6 rounded-lg bg-gray-100 border border-gray-200 text-gray-900 font-mono font-black text-xs inline-flex items-center justify-center">
-                          {p.srNo}
-                        </span>
-                      </td>
-
-                      {/* Passenger Name */}
-                      <td className="py-3 px-3">
-                        <div className="font-bold text-gray-900 text-xs">{p.name}</div>
-                      </td>
-
-                      {/* Phone Number with Instant Action Buttons */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5 font-mono text-xs text-gray-800">
-                          <span>{p.mobile}</span>
-                          {/* Direct Phone Dialer */}
-                          <a
-                            href={`tel:${p.mobile.replace(/\s+/g, '')}`}
-                            className="w-5 h-5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-colors print:hidden"
-                            title="Call passenger"
-                          >
-                            <Phone size={10} />
-                          </a>
-                          {/* Direct WhatsApp Messaging */}
-                          <a
-                            href={`https://wa.me/${p.mobile.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(
-                              p.name
-                            )},%20this%20is%20Uday%20Travels.%20Your%20seat%20is%20${encodeURIComponent(
-                              p.seatNo
-                            )}%20for%20the%20journey%20on%20${encodeURIComponent(
-                              selectedDate
-                            )}.%20Pickup%20Stop:%20${encodeURIComponent(
-                              p.pickupStop
-                            )}%20(${encodeURIComponent(p.pickupTime)}).`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="w-5 h-5 rounded-md bg-green-50 hover:bg-green-100 text-green-700 flex items-center justify-center transition-colors print:hidden"
-                            title="Send WhatsApp update"
-                          >
-                            <MessageSquare size={10} />
-                          </a>
-                        </div>
-                      </td>
-
-                      {/* Pickup Stop (Chronological Order) */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-1.5 py-0.5 rounded bg-[#FEF3C7] text-[#92400E] font-mono font-extrabold text-[10px] shrink-0">
-                            Stop #{p.pickupSequence}
-                          </span>
-                          <span className="font-bold text-gray-900 text-xs">{p.pickupStop}</span>
-                        </div>
-                      </td>
-
-                      {/* Drop Stop */}
-                      <td className="py-3 px-3">
-                        <span className="font-medium text-gray-800 text-xs">{p.dropStop}</span>
-                      </td>
-
-                      {/* Seat */}
-                      <td className="py-3 px-3 text-center">
-                        <span className="px-2 py-1 rounded-md bg-amber-50 border border-amber-200 text-amber-950 font-mono font-black text-xs">
-                          {p.seatNo}
-                        </span>
-                      </td>
-
-                      {/* Ticket PNR */}
-                      <td className="py-3 px-3">
-                        <a
-                          href={`/ticket/${p.ticketNo}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="font-mono text-xs font-bold text-amber-800 hover:text-amber-950 hover:underline inline-flex items-center gap-1"
-                        >
-                          <span>{p.ticketNo}</span>
-                          <ExternalLink size={9} className="print:hidden text-gray-400" />
-                        </a>
-                      </td>
-
-                      {/* How Much Paid & Time for Booking */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-900 font-mono font-black text-xs">
-                            ₹{p.fare}
-                          </span>
-                          <span className="text-[10px] text-gray-500 font-medium">
-                            {p.paymentMethod?.includes('CASH') ? 'Cash' : 'UPI/Online'}
-                          </span>
-                        </div>
-                        {p.bookedAt && (
-                          <div className="text-[10px] font-mono text-gray-500 mt-0.5 flex items-center gap-1">
-                            <span>{formatISTTime(p.bookedAt)}</span>
-                            <span>&bull;</span>
-                            <span className="text-gray-400">{formatTimeAgo(p.bookedAt)}</span>
-                          </div>
-                        )}
-                      </td>
-
-                      {/* Departure */}
-                      <td className="py-3 px-3 font-mono text-xs text-gray-600">
-                        {p.departureTime}
-                      </td>
-
-                      {/* Boarding Status Toggle */}
-                      <td className="py-3 px-3 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleBoarding(p.tripId, p.seatNo, p.boarded)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                            p.boarded
-                              ? 'bg-emerald-600 text-white shadow-xs'
-                              : 'bg-gray-100 hover:bg-amber-100 text-gray-700 border border-gray-200'
-                          }`}
-                        >
-                          {p.boarded ? (
-                            <>
-                              <CheckSquare size={12} />
-                              <span>Boarded</span>
-                            </>
-                          ) : (
-                            <>
-                              <Square size={12} className="text-gray-400" />
-                              <span>Check-in</span>
-                            </>
-                          )}
-                        </button>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          // FLAT CHRONOLOGICAL CHECKLIST VIEW (DEFAULT)
+          <div className="space-y-2.5">
+            {filteredPassengers.map((p) => renderPassengerCard(p))}
           </div>
         )}
       </section>
 
-      {/* 5. Sleek Passenger Creation Modal (Declutters Main Page) */}
+      {/* ------------------------------------------------------------- */}
+      {/* 4. SLEEK PASSENGER CREATION MODAL */}
+      {/* ------------------------------------------------------------- */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-xl w-full p-6 space-y-4">
-            {/* Modal Header */}
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-lg w-full p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-xl bg-[#FEF3C7] text-[#92400E] flex items-center justify-center font-black">
@@ -967,26 +901,24 @@ export function RouteWisePassengerSheet() {
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-gray-900 uppercase tracking-tight">
-                    Add Passenger to {ROUTES[selectedRoute].name}
+                    Add Passenger &bull; {ROUTES[selectedRoute].name}
                   </h3>
                   <span className="text-[11px] text-gray-500">
-                    Date: {selectedDate} &bull; Route Sorted
+                    Date: {selectedDate} &bull; Route Boarding List
                   </span>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors"
+                className="w-8 h-8 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-500 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
             </div>
 
-            {/* Modal Form */}
             <form onSubmit={handleSavePassenger} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                {/* Full Name */}
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
                     Passenger Name *
@@ -1001,25 +933,24 @@ export function RouteWisePassengerSheet() {
                   />
                 </div>
 
-                {/* Phone Number */}
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                    Phone Number *
+                    Phone Number (10 Digits) *
                   </label>
                   <input
                     type="tel"
                     required
+                    maxLength={10}
                     placeholder="e.g. 9822011001"
                     value={newMobile}
-                    onChange={(e) => setNewMobile(e.target.value)}
+                    onChange={(e) => setNewMobile(e.target.value.replace(/\D/g, ''))}
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 font-mono text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
                   />
                 </div>
 
-                {/* Pickup Stop (Chronological Route Sequence) */}
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                    Pickup Stop (Route Sequence) *
+                    Pickup Point (Route Order) *
                   </label>
                   <select
                     value={newPickup}
@@ -1028,13 +959,12 @@ export function RouteWisePassengerSheet() {
                   >
                     {pickupStops.map((stop, idx) => (
                       <option key={stop.name} value={stop.name}>
-                        Stop #{idx + 1} &bull; {stop.name} ({stop.time})
+                        Stop #{idx + 1} · {stop.name} ({stop.time})
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Drop Stop */}
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
                     Drop Stop *
@@ -1046,13 +976,12 @@ export function RouteWisePassengerSheet() {
                   >
                     {dropStops.map((name, idx) => (
                       <option key={name} value={name}>
-                        Drop #{idx + 1} &bull; {name}
+                        Drop #{idx + 1} · {name}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Departure Trip */}
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
                     Departure Bus
@@ -1064,81 +993,48 @@ export function RouteWisePassengerSheet() {
                   >
                     {availableTrips.map((t) => (
                       <option key={t.tripId} value={t.tripId}>
-                        {t.departureTime} &bull; {t.busNumber}
+                        {t.departureTime} · {t.busNumber}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Seat No (Optional) */}
                 <div>
                   <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                    Seat No (Leave blank for auto-assign)
+                    Seat No (Optional)
                   </label>
                   <input
                     type="text"
-                    placeholder="e.g. A1 (or leave blank)"
+                    placeholder="e.g. A1 (or auto-assign)"
                     value={newSeat}
                     onChange={(e) => setNewSeat(e.target.value.toUpperCase())}
                     className="w-full px-3 py-2 rounded-xl border border-gray-200 font-mono text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
                   />
                 </div>
-
-                {/* Gender */}
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                    Gender
-                  </label>
-                  <select
-                    value={newGender}
-                    onChange={(e) => setNewGender(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
-                  >
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                  </select>
-                </div>
-
-                {/* Age */}
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-600 uppercase tracking-wider mb-1">
-                    Age
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="120"
-                    value={newAge}
-                    onChange={(e) => setNewAge(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#F8B018]"
-                  />
-                </div>
               </div>
 
-              {/* Modal Actions */}
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors"
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
-
                 <button
                   type="submit"
                   disabled={savingPassenger}
-                  className="px-5 py-2 bg-[#F8B018] hover:bg-[#e5a013] text-gray-950 text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-2"
+                  className="px-5 py-2 bg-[#F8B018] hover:bg-[#e5a013] text-gray-950 text-xs font-black rounded-xl shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {savingPassenger ? (
                     <>
                       <RefreshCw size={13} className="animate-spin" />
-                      <span>Saving to Route...</span>
+                      <span>Saving...</span>
                     </>
                   ) : (
                     <>
                       <CheckCircle2 size={14} />
-                      <span>Save &amp; Assign to Route</span>
+                      <span>Save &amp; Add to Route</span>
                     </>
                   )}
                 </button>
@@ -1147,6 +1043,189 @@ export function RouteWisePassengerSheet() {
           </div>
         </div>
       )}
+
+      {/* Date Picker Modal */}
+      <ThemedDatePickerModal
+        isOpen={calendarOpen}
+        onClose={() => setCalendarOpen(false)}
+        selectedDate={selectedDate}
+        onSelectDate={(date) => {
+          setSelectedDate(date)
+          setCalendarOpen(false)
+        }}
+        minDate={today}
+      />
     </div>
   )
+
+  // -------------------------------------------------------------
+  // HELPER: RENDER MODERN PASSENGER CARD
+  // Focused specifically on: Sr No, Name, Pickup point, Number, and Tick!
+  // -------------------------------------------------------------
+  function renderPassengerCard(p: RoutePassengerRecord) {
+    const isToggling = togglingSeat === p.seatNo
+
+    return (
+      <div
+        key={`${p.ticketNo}_${p.seatNo}`}
+        className={`rounded-2xl border p-3.5 sm:p-4.5 transition-all shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+          p.boarded
+            ? 'bg-emerald-50/30 border-emerald-300 hover:border-emerald-400 hover:bg-emerald-50/50'
+            : 'bg-white border-gray-200 hover:border-amber-300 hover:shadow-sm'
+        }`}
+      >
+        {/* Left Side: Sr No, Name, Seat Tag, Pickup Point & Phone Number */}
+        <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
+          {/* 1. SR NO */}
+          <div className="shrink-0 flex flex-col items-center justify-center">
+            <span
+              className={`w-10 h-10 rounded-xl font-mono font-black text-sm flex items-center justify-center shadow-2xs border ${
+                p.boarded
+                  ? 'bg-emerald-600 text-white border-emerald-700'
+                  : 'bg-gray-100 text-gray-900 border-gray-200'
+              }`}
+            >
+              #{p.srNo}
+            </span>
+            <span className="text-[9px] uppercase font-bold text-gray-400 mt-0.5">
+              Sr No
+            </span>
+          </div>
+
+          {/* Details Column */}
+          <div className="flex-1 min-w-0 space-y-1">
+            {/* 2. NAME & SEAT */}
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-sm sm:text-base font-black text-gray-950 truncate">
+                {p.name}
+              </h4>
+              <span className="px-2 py-0.5 rounded-md bg-[#F8B018]/20 border border-[#F8B018]/50 text-amber-950 font-mono font-black text-[11px]">
+                Seat {p.seatNo}
+              </span>
+              <span className="text-[10px] uppercase font-bold text-gray-400">
+                ({p.gender === 'female' ? 'Female' : 'Male'}, {p.age}y)
+              </span>
+            </div>
+
+            {/* 3. PICKUP POINT & 4. NUMBER */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+              {/* Pickup Point */}
+              <div className="flex items-center gap-1.5 font-bold text-gray-900">
+                <MapPin size={13} className="text-[#F8B018] shrink-0" />
+                <span className="text-amber-950 font-black">{p.pickupStop}</span>
+                <span className="text-[11px] font-mono text-gray-500 font-medium">
+                  ({p.pickupTime})
+                </span>
+                <span className="text-[10px] font-mono text-gray-400 font-normal">
+                  · Stop #{p.pickupSequence}
+                </span>
+              </div>
+
+              {/* Passenger Contact Number with Instant Call & WhatsApp */}
+              <div className="flex items-center gap-1.5 font-mono text-xs text-gray-800">
+                <Phone size={12} className="text-gray-400 shrink-0" />
+                <span className="font-bold">{p.mobile}</span>
+
+                {/* Direct Phone Dialer */}
+                <a
+                  href={`tel:${p.mobile.replace(/\s+/g, '')}`}
+                  className="w-5 h-5 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-colors print:hidden"
+                  title="Call passenger"
+                >
+                  <Phone size={10} />
+                </a>
+
+                {/* Direct WhatsApp Message */}
+                <a
+                  href={`https://wa.me/${p.mobile.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(
+                    p.name
+                  )},%20this%20is%20Uday%20Travels.%20Your%20seat%20is%20${encodeURIComponent(
+                    p.seatNo
+                  )}%20for%20the%20journey%20on%20${encodeURIComponent(
+                    selectedDate
+                  )}.%20Pickup%20Stop:%20${encodeURIComponent(p.pickupStop)}%20(${encodeURIComponent(
+                    p.pickupTime
+                  )}).`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-5 h-5 rounded-md bg-green-50 hover:bg-green-100 text-green-700 flex items-center justify-center transition-colors print:hidden"
+                  title="WhatsApp passenger"
+                >
+                  <MessageSquare size={10} />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Side: 5. THE TICK BUTTON (Shows passenger is boarded properly from that place) */}
+        <div className="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-100 shrink-0">
+          {/* Status Label */}
+          <div className="text-right sm:block">
+            {p.boarded ? (
+              <div className="text-left sm:text-right">
+                <span className="text-[11px] font-extrabold text-emerald-700 block">
+                  ✓ Boarded properly
+                </span>
+                <span className="text-[10px] text-gray-500 font-mono block">
+                  at {p.pickupStop} {p.boardedAt ? `(${formatISTTime(p.boardedAt)})` : ''}
+                </span>
+              </div>
+            ) : (
+              <div className="text-left sm:text-right">
+                <span className="text-[11px] font-bold text-amber-800 block">
+                  Waiting to board
+                </span>
+                <span className="text-[10px] text-gray-400 font-mono block">
+                  Reporting at {p.pickupStop}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Large Interactive Tick Toggle Button */}
+          <button
+            type="button"
+            disabled={isToggling}
+            onClick={() =>
+              handleToggleBoarding(
+                p.tripId,
+                p.seatNo,
+                p.ticketNo,
+                p.boarded,
+                p.name,
+                p.pickupStop
+              )
+            }
+            className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer select-none active:scale-95 shadow-xs ${
+              p.boarded
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'
+                : 'bg-white hover:bg-amber-50 text-gray-700 border-2 border-gray-300 hover:border-amber-400'
+            }`}
+            title={
+              p.boarded
+                ? `Click to mark ${p.name} as not boarded`
+                : `Click to tick and confirm ${p.name} boarded properly`
+            }
+          >
+            {isToggling ? (
+              <RefreshCw size={16} className="animate-spin text-gray-400" />
+            ) : p.boarded ? (
+              <>
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                  <Check size={14} className="stroke-[3]" />
+                </div>
+                <span>Boarded</span>
+              </>
+            ) : (
+              <>
+                <Circle size={15} className="text-gray-400" />
+                <span>Mark Boarded</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    )
+  }
 }
