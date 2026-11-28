@@ -252,7 +252,7 @@ export async function POST(req: Request) {
       orderId: razorpayOrderId || 'INTERNAL_WALLET_ONLY',
       amount: razorpayPaise,
       currency: 'INR',
-      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || 'rzp_test_dummy_key_id',
+      keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || 'rzp_test_U00WmPMLownfgs',
       walletDebitPaise,
       razorpayPaise,
       totalPaise,

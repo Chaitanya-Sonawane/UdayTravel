@@ -3,10 +3,10 @@ import { z } from 'zod'
 const envSchema = z.object({
   // Razorpay
   RAZORPAY_MODE: z.enum(['test', 'live']).default('test'),
-  RAZORPAY_KEY_ID: z.string().optional().default('rzp_test_1DP5mmOlF5G5ag'),
-  RAZORPAY_KEY_SECRET: z.string().optional().default('mock_key_secret_for_test_mode'),
+  RAZORPAY_KEY_ID: z.string().optional().default('rzp_test_U00WmPMLownfgs'),
+  RAZORPAY_KEY_SECRET: z.string().optional().default('N160Ry7FB4ByB1k0kvp4trEE'),
   RAZORPAY_WEBHOOK_SECRET: z.string().optional().default('uday_webhook_secret_2026'),
-  NEXT_PUBLIC_RAZORPAY_KEY_ID: z.string().optional().default('rzp_test_1DP5mmOlF5G5ag'),
+  NEXT_PUBLIC_RAZORPAY_KEY_ID: z.string().optional().default('rzp_test_U00WmPMLownfgs'),
   NEXT_PUBLIC_RAZORPAY_MODE: z.enum(['test', 'live']).default('test'),
 
   // Firebase Client
@@ -29,7 +29,7 @@ export type AppEnv = z.infer<typeof envSchema>
 
 function validateEnv(): AppEnv {
   const mode = (process.env.RAZORPAY_MODE || 'test') as 'test' | 'live'
-  const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_1DP5mmOlF5G5ag'
+  const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_U00WmPMLownfgs'
 
   // Security guard: Ensure key prefix matches the designated mode
   if (mode === 'test' && keyId && !keyId.startsWith('rzp_test_')) {

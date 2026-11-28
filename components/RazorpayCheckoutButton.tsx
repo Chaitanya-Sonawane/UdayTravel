@@ -61,7 +61,10 @@ export function RazorpayCheckoutButton({
 
       // Step 2: Open Standard Razorpay Checkout Modal
       openCheckout({
-        key: orderData.key_id || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || '',
+        key:
+          orderData.key_id && orderData.key_id !== 'rzp_test_dummy_key_id'
+            ? orderData.key_id
+            : process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_U00WmPMLownfgs',
         order_id: orderData.order_id,
         amount: orderData.amount,
         currency: orderData.currency || currency,

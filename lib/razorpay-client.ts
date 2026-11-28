@@ -182,6 +182,10 @@ function openSimulatedCheckout(options: CheckoutOptions): void {
 export function openCheckout(options: CheckoutOptions): void {
   if (typeof window === 'undefined') return
 
+  if (!options.key || options.key === 'rzp_test_dummy_key_id') {
+    options.key = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || 'rzp_test_U00WmPMLownfgs'
+  }
+
   // 1. If explicit dev/mock order ID or mock environment, open interactive simulation
   const isDevOrder =
     options.order_id.startsWith('order_dev_') ||
