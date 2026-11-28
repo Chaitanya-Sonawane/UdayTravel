@@ -1,9 +1,13 @@
 import { z } from 'zod'
 
-export const SeatIdRegex = /^[A-J][1-5]$/
+export const SeatIdRegex = /^(?:[A-Ja-j][1-6]|[1-9]\d?)$/
 
 export const HoldPassengerSchema = z.object({
-  seatId: z.string().regex(SeatIdRegex, 'Invalid seat ID format'),
+  seatId: z
+    .string()
+    .trim()
+    .regex(SeatIdRegex, 'Invalid seat ID format')
+    .transform((s) => s.toUpperCase()),
   gender: z
     .enum(['F', 'M', 'female', 'male'])
     .transform((g) => (g === 'female' || g === 'F' ? 'F' : 'M')),
@@ -20,13 +24,27 @@ export const SeatHoldRequestSchema = z.object({
   acceptAdjacent: z.boolean().default(false),
   deviceId: z.string().optional(),
   passengers: z.array(HoldPassengerSchema).min(1).max(6).optional(),
-  seatIds: z.array(z.string().regex(SeatIdRegex, 'Invalid seat ID format')).min(1).max(6).optional(),
+  seatIds: z
+    .array(
+      z
+        .string()
+        .trim()
+        .regex(SeatIdRegex, 'Invalid seat ID format')
+        .transform((s) => s.toUpperCase())
+    )
+    .min(1)
+    .max(6)
+    .optional(),
 })
 
 export type SeatHoldRequest = z.infer<typeof SeatHoldRequestSchema>
 
 export const PassengerDetailSchema = z.object({
-  seat: z.string().regex(SeatIdRegex),
+  seat: z
+    .string()
+    .trim()
+    .regex(SeatIdRegex, 'Invalid seat ID format')
+    .transform((s) => s.toUpperCase()),
   name: z.string().min(2).max(60),
   age: z.coerce.number().int().min(1).max(120),
   gender: z.enum(['male', 'female']),

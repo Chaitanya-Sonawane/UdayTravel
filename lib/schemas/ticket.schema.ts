@@ -11,7 +11,11 @@ export const TicketStatusSchema = z.enum([
 export type TicketStatus = z.infer<typeof TicketStatusSchema>
 
 export const TicketPassengerSchema = z.object({
-  seat: z.string().regex(SeatIdRegex),
+  seat: z
+    .string()
+    .trim()
+    .regex(SeatIdRegex, 'Invalid seat ID format')
+    .transform((s) => s.toUpperCase()),
   title: z.string().default(''),
   name: z.string().min(1),
   age: z.number().int().positive(),

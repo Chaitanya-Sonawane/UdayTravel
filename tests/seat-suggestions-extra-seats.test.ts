@@ -117,4 +117,80 @@ describe('Extra seats & suggestion patterns specification', () => {
       expect(typeof token).toBe('string')
     })
   })
+
+  describe('SeatIdRegex & HoldPassengerSchema validation', () => {
+    it('successfully validates front row cabin seats 1, 2, 3, 4', async () => {
+      const { HoldPassengerSchema, SeatHoldRequestSchema, SeatIdRegex } = await import('../lib/schemas/booking.schema')
+
+      for (const sId of ['1', '2', '3', '4']) {
+        expect(SeatIdRegex.test(sId)).toBe(true)
+
+        const parsedPax = HoldPassengerSchema.safeParse({
+          seatId: sId,
+          gender: 'M',
+          age: 30,
+        })
+        expect(parsedPax.success).toBe(true)
+        if (parsedPax.success) {
+          expect(parsedPax.data.seatId).toBe(sId)
+        }
+      }
+
+      const reqParsed = SeatHoldRequestSchema.safeParse({
+        routeId: 'AHM_PUN',
+        date: '2026-11-29',
+        tripId: 'AHM_PUN_0600_4951',
+        passengers: [
+          { seatId: '1', gender: 'male', age: 28 },
+          { seatId: '2', gender: 'female', age: 26 },
+        ],
+      })
+      expect(reqParsed.success).toBe(true)
+    })
+
+    it('successfully validates rear bench seat J6', async () => {
+      const { HoldPassengerSchema, SeatIdRegex } = await import('../lib/schemas/booking.schema')
+      expect(SeatIdRegex.test('J6')).toBe(true)
+
+      const parsed = HoldPassengerSchema.safeParse({
+        seatId: 'J6',
+        gender: 'female',
+        age: 24,
+      })
+      expect(parsed.success).toBe(true)
+      if (parsed.success) {
+        expect(parsed.data.seatId).toBe('J6')
+      }
+    })
+
+    it('successfully validates numeric bus seats (1..33)', async () => {
+      const { HoldPassengerSchema, SeatIdRegex } = await import('../lib/schemas/booking.schema')
+      for (let i = 1; i <= 33; i++) {
+        const sId = String(i)
+        expect(SeatIdRegex.test(sId)).toBe(true)
+        const parsed = HoldPassengerSchema.safeParse({
+          seatId: sId,
+          gender: 'M',
+          age: 25,
+        })
+        expect(parsed.success).toBe(true)
+      }
+    })
+
+    it('rejects truly invalid seat formats', async () => {
+      const { HoldPassengerSchema, SeatIdRegex } = await import('../lib/schemas/booking.schema')
+      for (const bad of ['0', '00', 'A0', 'A7', 'K1', 'xyz', '']) {
+        expect(SeatIdRegex.test(bad)).toBe(false)
+        const parsed = HoldPassengerSchema.safeParse({
+          seatId: bad,
+          gender: 'M',
+          age: 25,
+        })
+        expect(parsed.success).toBe(false)
+        if (!parsed.success) {
+          expect(parsed.error.issues[0]?.message).toBe('Invalid seat ID format')
+        }
+      }
+    })
+  })
 })
