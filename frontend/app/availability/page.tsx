@@ -60,6 +60,7 @@ function AvailabilityContent() {
 
   const initialRoute = (searchParams.get('route') as UserRoute) || null
   const initialDate = searchParams.get('date') || null
+  const isWomenBooking = searchParams.get('women') === 'true'
 
   const [route, setRoute] = useState<UserRoute | null>(initialRoute)
   const [date, setDate] = useState<string | null>(initialDate)
@@ -219,6 +220,17 @@ function AvailabilityContent() {
       <Hero />
 
       <section className={`availability-search ${ready ? 'has-results' : ''}`}>
+        {isWomenBooking && (
+          <div className="bg-pink-50/90 border border-pink-200 text-pink-950 rounded-2xl p-3.5 mb-4 flex items-center gap-3 shadow-2xs animate-in fade-in duration-200">
+            <div className="w-8 h-8 rounded-xl bg-pink-100 flex items-center justify-center text-pink-600 shrink-0 text-base">
+              👩
+            </div>
+            <div className="flex-1">
+              <span className="font-extrabold text-xs block">Booking for Women Active</span>
+              <span className="text-[11px] text-pink-700 font-medium">Adjacent female seating &amp; ladies priority front rows prioritized on all departures.</span>
+            </div>
+          </div>
+        )}
         <SearchCard
           route={route}
           date={date}
@@ -293,6 +305,7 @@ function AvailabilityContent() {
                       date={date!}
                       index={idx}
                       passengerCount={passengerCount}
+                      isWomenBooking={isWomenBooking}
                     />
                   ))}
                 </div>
@@ -639,12 +652,14 @@ function BusCard({
   date,
   index = 0,
   passengerCount = 1,
+  isWomenBooking = false,
 }: {
   bus: TripAvailabilityItem
   route: UserRoute
   date: string
   index?: number
   passengerCount?: number
+  isWomenBooking?: boolean
 }) {
   const router = useRouter()
   const [selecting, setSelecting] = useState(false)
@@ -683,7 +698,7 @@ function BusCard({
         formattedTitle
       )}&busNumber=${encodeURIComponent(busNumberDisplay)}&departure=${encodeURIComponent(bus.departureTime)}&arrival=${encodeURIComponent(
         bus.arrivalTime
-      )}&fare=${bus.fare}&count=${passengerCount}&step=details`
+      )}&fare=${bus.fare}&count=${passengerCount}&step=details${isWomenBooking ? '&women=true' : ''}`
     )
   }
 

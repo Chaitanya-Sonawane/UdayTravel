@@ -19,6 +19,18 @@ export function todayIST(now: Date = new Date()): string {
 }
 
 /**
+ * Returns the YYYY-MM-DD date shifted by N days ahead or behind.
+ */
+export function getNextDate(dateStr: string, daysAhead = 1): string {
+  const parts = dateStr.split('-').map(Number)
+  const y = parts[0] ?? 2026
+  const m = parts[1] ?? 1
+  const d = parts[2] ?? 1
+  const dt = new Date(Date.UTC(y, m - 1, d + daysAhead))
+  return dt.toISOString().slice(0, 10)
+}
+
+/**
  * Checks whether a given YYYY-MM-DD date falls within the booking window [today, today + BOOKING_WINDOW_DAYS].
  * All comparisons are evaluated in IST.
  */

@@ -37,6 +37,8 @@ import BlackThemeFooter from '@/components/footer/BlackThemeFooter'
 import NavDrawer from '@/components/navigation/NavDrawer'
 import AlternatingInfoSection from '@/components/home/AlternatingInfoSection'
 import DarkThemeStatsSection from '@/components/home/DarkThemeStatsSection'
+import RedBusSearchBar from '@/components/home/RedBusSearchBar'
+import RedBusOffersSection from '@/components/home/RedBusOffersSection'
 
 const heroImage = 'https://hebbkx1anhila5yf.public.blob.vercel-storage.com/uday-travels-homepage-background%20%281%29-zMwZmyD7R7O8ItfYIMzzIrrJEy2TQT.png'
 
@@ -429,6 +431,14 @@ export default function Page() {
         </div>
         <div className="absolute bottom-8 right-5 hidden items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-white/50 md:flex xl:right-16"><CircleHelp size={14} /> Need a hand?</div>
       </section>
+
+      {/* REDBUS STYLE FLOATING MULTI-COLUMN SEARCH BAR */}
+      <section className="relative z-30 -mt-10 sm:-mt-14 mb-12">
+        <RedBusSearchBar />
+      </section>
+
+      {/* REDBUS STYLE OFFERS FOR YOU & COMMUTER PASSES */}
+      <RedBusOffersSection />
 
       {/* DARK THEME STATS SECTION - Live Network Metrics with Count-up Animation */}
       <DarkThemeStatsSection />

@@ -437,6 +437,15 @@ export default function PassengersPage() {
     if (countParam && countParam > 0 && countParam <= 6) {
       setPassengerCount(countParam)
     }
+
+    const isWomen = searchParams.get('women') === 'true'
+    if (isWomen) {
+      const store = useBookingStore.getState()
+      if (store.passengers.length > 0 && store.passengers[0] && store.passengers[0].gender !== 'woman') {
+        store.updatePassenger(store.passengers[0].id, { gender: 'woman' })
+      }
+    }
+
     setStep('details')
 
     if (tripId || busName) {
