@@ -187,6 +187,14 @@ function computeOptimisticSeatSuggestion(
   if (count === 1) {
     const targetGender = genders[0]!
 
+    // Check frontRow seat 1 (solo window)
+    if (template.frontRow && template.frontRow.leftSeats.includes('1') && isSeatFree('1') && isGenderSafe('1', targetGender)) {
+      return {
+        seats: ['1'],
+        reason: `Front cabin window seat (1) · Comfortable solo seat`,
+      }
+    }
+
     if (targetGender === 'F') {
       // 1. Next to an existing female passenger (fills ladies pairs)
       for (const row of template.rows) {
@@ -275,6 +283,22 @@ function computeOptimisticSeatSuggestion(
 
   // Case 2: Pair (N = 2)
   if (count === 2) {
+    // Front row across-aisle pair (1 & 2) or front right pair (2 & 3)
+    if (template.frontRow) {
+      if (isSeatFree('1') && isSeatFree('2')) {
+        return {
+          seats: ['1', '2'],
+          reason: `Front coach pair (1, 2) · Across central aisle`,
+        }
+      }
+      if (isSeatFree('2') && isSeatFree('3')) {
+        return {
+          seats: ['2', '3'],
+          reason: `Front coach pair (2, 3) · Seated together`,
+        }
+      }
+    }
+
     // If Male + Female (Couple/Family):
     // Left side pair (col 1 + col 2) has zero strangers adjacent!
     for (const row of template.rows) {
@@ -304,6 +328,16 @@ function computeOptimisticSeatSuggestion(
 
   // Case 3: 3 Passengers (N = 3)
   if (count === 3) {
+    // Front row 3-seat bench (2, 3, 4)
+    if (template.frontRow && template.frontRow.rightSeats.length === 3) {
+      if (template.frontRow.rightSeats.every(isSeatFree)) {
+        return {
+          seats: [...template.frontRow.rightSeats],
+          reason: `Front row trio (${template.frontRow.rightSeats.join(', ')}) · Seated together in front`,
+        }
+      }
+    }
+
     for (const row of template.rows) {
       if (row.rightSeats.length === 3 && row.rightSeats.every(isSeatFree)) {
         return {
@@ -325,7 +359,57 @@ function computeOptimisticSeatSuggestion(
     }
   }
 
-  // Case 4: 4+ Passengers or General Fallback
+  // Case 4: 4 Passengers
+  if (count === 4) {
+    // Front row 4 seats (1, 2, 3, 4)
+    if (template.frontRow && [...template.frontRow.leftSeats, ...template.frontRow.rightSeats].length === 4) {
+      const front4 = [...template.frontRow.leftSeats, ...template.frontRow.rightSeats]
+      if (front4.every(isSeatFree)) {
+        return {
+          seats: front4,
+          reason: `Front coach full row (${front4.join(', ')}) · Group seated together`,
+        }
+      }
+    }
+
+    // Rear bench 4 seats
+    if (template.rearBench && template.rearBench.length >= 4) {
+      for (let i = 0; i <= template.rearBench.length - 4; i++) {
+        const slice = template.rearBench.slice(i, i + 4)
+        if (slice.every(isSeatFree)) {
+          return {
+            seats: slice,
+            reason: `Rear bench quartet (${slice.join(', ')}) · Group seated together`,
+          }
+        }
+      }
+    }
+  }
+
+  // Case 5: 5 Passengers
+  if (count === 5 && template.rearBench && template.rearBench.length >= 5) {
+    for (let i = 0; i <= template.rearBench.length - 5; i++) {
+      const slice = template.rearBench.slice(i, i + 5)
+      if (slice.every(isSeatFree)) {
+        return {
+          seats: slice,
+          reason: `Rear bench 5-seat block (${slice.join(', ')}) · Group seated together`,
+        }
+      }
+    }
+  }
+
+  // Case 6: 6 Passengers
+  if (count === 6 && template.rearBench && template.rearBench.length >= 6) {
+    if (template.rearBench.every(isSeatFree)) {
+      return {
+        seats: [...template.rearBench],
+        reason: `Full rear bench 6 seats (${template.rearBench.join(', ')}) · Whole group together`,
+      }
+    }
+  }
+
+  // Case 4+: General Fallback
   const leftPairs: string[] = []
   for (const row of template.rows) {
     if (row.leftSeats.every(isSeatFree)) {

@@ -119,9 +119,11 @@ export function DailyRouteBusScheduler({
   }, [activeTemplate])
 
   // Fetch scheduled trips for current route & date
-  const fetchDailyTrips = useCallback(async () => {
-    setLoadingSchedule(true)
-    setActionNotice(null)
+  const fetchDailyTrips = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
+      setLoadingSchedule(true)
+      setActionNotice(null)
+    }
     try {
       const res = await fetch(`/api/admin/schedule?route=${selectedRoute}&date=${selectedDate}`)
       if (res.ok) {
@@ -131,15 +133,17 @@ export function DailyRouteBusScheduler({
     } catch {
       // Safe catch for schedule load
     } finally {
-      setLoadingSchedule(false)
+      if (!isBackground) {
+        setLoadingSchedule(false)
+      }
     }
   }, [selectedRoute, selectedDate])
 
   useEffect(() => {
-    fetchDailyTrips()
+    fetchDailyTrips(false)
     const pollTimer = setInterval(() => {
-      fetchDailyTrips()
-    }, 4000)
+      fetchDailyTrips(true)
+    }, 5000)
     return () => clearInterval(pollTimer)
   }, [fetchDailyTrips])
 
@@ -771,7 +775,7 @@ export function DailyRouteBusScheduler({
 
           <button
             type="button"
-            onClick={fetchDailyTrips}
+            onClick={() => fetchDailyTrips(false)}
             disabled={loadingSchedule}
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gray-100 hover:bg-gray-200 active:scale-95 text-gray-700 text-xs font-bold rounded-xl transition-all cursor-pointer shrink-0"
           >
@@ -795,9 +799,9 @@ export function DailyRouteBusScheduler({
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {scheduledTrips.map((t) => (
+            {scheduledTrips.map((t, idx) => (
               <div
-                key={t.tripId}
+                key={t.tripId || `${t.departureTime}_${t.busNumber || idx}`}
                 className="p-4 sm:p-5 bg-white border border-gray-200 hover:border-[#F8B018] rounded-2xl space-y-3.5 transition-all shadow-xs hover:shadow-md flex flex-col justify-between"
               >
                 {/* Header: Bus Number in Big Font, Name & Price Tag */}

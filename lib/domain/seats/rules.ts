@@ -43,9 +43,17 @@ export interface Suggestion {
 
 export const ALL_SEAT_ROWS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'] as const
 export const ALL_SEAT_COLS = [1, 2, 3, 4, 5] as const
+export const FRONT_ROW_SEATS = ['1', '2', '3', '4'] as const
+export const REAR_BENCH_SEATS = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6'] as const
+export const NUMERIC_BUS_SEATS = Array.from({ length: 33 }, (_, i) => String(i + 1))
 
-export const ALL_SEAT_IDS: string[] = ALL_SEAT_ROWS.flatMap((r) =>
-  ALL_SEAT_COLS.map((c) => `${r}${c}`)
+export const ALL_SEAT_IDS: string[] = Array.from(
+  new Set([
+    ...FRONT_ROW_SEATS,
+    ...ALL_SEAT_ROWS.flatMap((r) => ALL_SEAT_COLS.map((c) => `${r}${c}`)),
+    ...REAR_BENCH_SEATS,
+    ...NUMERIC_BUS_SEATS,
+  ])
 )
 
 /**
@@ -414,15 +422,19 @@ export function evaluate(
 }
 
 function getSeatCol(seatId: string): number {
+  if (['1', '2', '3', '4'].includes(seatId)) return parseInt(seatId, 10)
   return parseInt(seatId.slice(1), 10)
 }
 
 function getSeatRow(seatId: string): string {
+  if (['1', '2', '3', '4'].includes(seatId)) return 'FRONT'
   return seatId.charAt(0)
 }
 
 function matchesSeatType(seatId: string, pref?: 'window' | 'aisle' | 'any'): boolean {
   if (!pref || pref === 'any') return true
+  if (seatId === '1' || seatId === '4' || seatId === 'J6') return pref === 'window'
+  if (seatId === '2' || seatId === '3') return pref === 'aisle'
   const col = getSeatCol(seatId)
   if (pref === 'window') return col === 1 || col === 5
   if (pref === 'aisle') return col === 2 || col === 3
@@ -431,6 +443,8 @@ function matchesSeatType(seatId: string, pref?: 'window' | 'aisle' | 'any'): boo
 
 function matchesArea(seatId: string, pref?: 'front' | 'middle' | 'rear' | 'any'): boolean {
   if (!pref || pref === 'any') return true
+  if (['1', '2', '3', '4'].includes(seatId)) return pref === 'front'
+  if (seatId.startsWith('J')) return pref === 'rear'
   const row = getSeatRow(seatId)
   if (pref === 'front') return ['A', 'B', 'C'].includes(row)
   if (pref === 'middle') return ['D', 'E', 'F', 'G'].includes(row)
@@ -533,7 +547,12 @@ export function suggestSeats(
       const sId = seatIds[i]
       if (p && sId) {
         if (matchesSeatType(sId, p.prefs?.seatType)) prefScore += 10
-        if (matchesArea(sId, p.prefs?.area)) prefScore += 5
+        if (matchesArea(sId, p.prefs?.area)) {
+          const isExtremeArea =
+            (['1', '2', '3', '4'].includes(sId) && p.prefs?.area === 'front') ||
+            (sId.startsWith('J') && p.prefs?.area === 'rear')
+          prefScore += isExtremeArea ? 15 : 5
+        }
       }
     }
 
@@ -572,7 +591,14 @@ export function suggestSeats(
   else if (nPax === 2) {
     if (isMixedGender) {
       // Mixed gender (Male + Female):
-      // Recommendation 1: Across the central aisle (seat 2 and seat 3)
+      // Recommendation 1: Across the central aisle
+      // Front row across central aisle: Seat 1 (left) and Seat 2 (right aisle)
+      if (isSeatFree(normalized['1'], now) && isSeatFree(normalized['2'], now)) {
+        tryAddSuggestion(['1', '2'], 445, 'FAMILY_BLOCK')
+        tryAddSuggestion(['2', '1'], 445, 'FAMILY_BLOCK')
+      }
+
+      // Main rows across central aisle (seat 2 and seat 3)
       for (const row of ALL_SEAT_ROWS) {
         const s2 = `${row}2`
         const s3 = `${row}3`
@@ -582,6 +608,20 @@ export function suggestSeats(
           // Permutation 2
           tryAddSuggestion([s3, s2], 450, 'FAMILY_BLOCK')
         }
+      }
+
+      // Front row to Row A consecutive:
+      if (isSeatFree(normalized['1'], now) && isSeatFree(normalized['A1'], now)) {
+        tryAddSuggestion(['1', 'A1'], 420, 'FAMILY_BLOCK')
+      }
+      if (isSeatFree(normalized['2'], now) && isSeatFree(normalized['A3'], now)) {
+        tryAddSuggestion(['2', 'A3'], 415, 'FAMILY_BLOCK')
+      }
+      if (isSeatFree(normalized['3'], now) && isSeatFree(normalized['A4'], now)) {
+        tryAddSuggestion(['3', 'A4'], 410, 'FAMILY_BLOCK')
+      }
+      if (isSeatFree(normalized['4'], now) && isSeatFree(normalized['A5'], now)) {
+        tryAddSuggestion(['4', 'A5'], 405, 'FAMILY_BLOCK')
       }
 
       // Recommendation 2: Consecutive rows in front/back (same column)
@@ -599,6 +639,24 @@ export function suggestSeats(
       }
     } else {
       // Same gender (both M or both F):
+      // Front row pairs (Seats 2-3, 3-4)
+      if (isSeatFree(normalized['2'], now) && isSeatFree(normalized['3'], now)) {
+        tryAddSuggestion(['2', '3'], 445, 'FAMILY_BLOCK')
+      }
+      if (isSeatFree(normalized['3'], now) && isSeatFree(normalized['4'], now)) {
+        tryAddSuggestion(['3', '4'], 440, 'FAMILY_BLOCK')
+      }
+
+      // Rear bench adjacent pairs: J1-J2, J2-J3, J3-J4, J4-J5, J5-J6
+      const rearSeats = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6']
+      for (let i = 0; i < rearSeats.length - 1; i++) {
+        const sA = rearSeats[i]!
+        const sB = rearSeats[i + 1]!
+        if (isSeatFree(normalized[sA], now) && isSeatFree(normalized[sB], now)) {
+          tryAddSuggestion([sA, sB], 430, 'FAMILY_BLOCK')
+        }
+      }
+
       for (const row of ALL_SEAT_ROWS) {
         // 2-seat side (rows A-J, left side: 1, 2)
         const s1 = `${row}1`
@@ -627,6 +685,24 @@ export function suggestSeats(
   // 3. Three Passengers
   else if (nPax === 3) {
     if (!isMixedGender) {
+      // Front row 3-seat bench: 2, 3, 4
+      if (
+        isSeatFree(normalized['2'], now) &&
+        isSeatFree(normalized['3'], now) &&
+        isSeatFree(normalized['4'], now)
+      ) {
+        tryAddSuggestion(['2', '3', '4'], 445, 'FAMILY_BLOCK')
+      }
+
+      // Rear bench trios: J1-J2-J3, J2-J3-J4, J3-J4-J5, J4-J5-J6
+      const rearSeats = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6']
+      for (let i = 0; i <= rearSeats.length - 3; i++) {
+        const trio = rearSeats.slice(i, i + 3)
+        if (trio.every((s) => isSeatFree(normalized[s], now))) {
+          tryAddSuggestion(trio, 440, 'FAMILY_BLOCK')
+        }
+      }
+
       // All 3 same gender: 3-seat side is perfect
       for (const row of ALL_SEAT_ROWS) {
         const s3 = `${row}3`
@@ -666,6 +742,19 @@ export function suggestSeats(
       const pairIndices = fIndices.length === 2 ? fIndices : mIndices
       const soloIndex = fIndices.length === 1 ? fIndices[0]! : mIndices[0]!
 
+      // Front row: Pair in 2-3, solo across aisle in 1
+      if (
+        isSeatFree(normalized['1'], now) &&
+        isSeatFree(normalized['2'], now) &&
+        isSeatFree(normalized['3'], now)
+      ) {
+        const cand = new Array(3)
+        cand[pairIndices[0]!] = '2'
+        cand[pairIndices[1]!] = '3'
+        cand[soloIndex] = '1'
+        tryAddSuggestion(cand, 460, 'FAMILY_BLOCK')
+      }
+
       for (const row of ALL_SEAT_ROWS) {
         const s1 = `${row}1`
         const s2 = `${row}2`
@@ -704,6 +793,25 @@ export function suggestSeats(
 
   // 4. Four Passengers
   else if (nPax === 4) {
+    // Front row full set (1, 2, 3, 4)
+    if (['1', '2', '3', '4'].every((s) => isSeatFree(normalized[s], now))) {
+      tryAddSuggestion(['1', '2', '3', '4'], 440, 'FAMILY_BLOCK')
+    }
+
+    // Rear bench quartets (J1-J4, J2-J5, J3-J6)
+    const rearSeats = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6']
+    for (let i = 0; i <= rearSeats.length - 4; i++) {
+      const q = rearSeats.slice(i, i + 4)
+      if (q.every((s) => isSeatFree(normalized[s], now))) {
+        tryAddSuggestion(q, 420, 'FAMILY_BLOCK')
+      }
+    }
+
+    // Front + Row A pairs
+    if (['1', 'A1', '2', 'A3'].every((s) => isSeatFree(normalized[s], now))) {
+      tryAddSuggestion(['1', 'A1', '2', 'A3'], 410, 'FAMILY_BLOCK')
+    }
+
     for (let i = 0; i < ALL_SEAT_ROWS.length - 1; i++) {
       const r1 = ALL_SEAT_ROWS[i]
       const r2 = ALL_SEAT_ROWS[i + 1]
@@ -720,6 +828,20 @@ export function suggestSeats(
 
   // 5. Five Passengers
   else if (nPax === 5) {
+    // Rear bench 5-seat blocks (J1-J5 or J2-J6)
+    const rearSeats = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6']
+    for (let i = 0; i <= rearSeats.length - 5; i++) {
+      const b5 = rearSeats.slice(i, i + 5)
+      if (b5.every((s) => isSeatFree(normalized[s], now))) {
+        tryAddSuggestion(b5, 430, 'FAMILY_BLOCK')
+      }
+    }
+
+    // Front row + Row A: [1, 2, 3, 4, A1]
+    if (['1', '2', '3', '4', 'A1'].every((s) => isSeatFree(normalized[s], now))) {
+      tryAddSuggestion(['1', '2', '3', '4', 'A1'], 410, 'FAMILY_BLOCK')
+    }
+
     if (!isMixedGender) {
       for (const row of ALL_SEAT_ROWS) {
         const seats5 = [`${row}1`, `${row}2`, `${row}3`, `${row}4`, `${row}5`]
@@ -740,6 +862,12 @@ export function suggestSeats(
 
   // 6. Six Passengers
   else if (nPax === 6) {
+    // Full rear bench 6 seats (J1, J2, J3, J4, J5, J6)
+    const rearSeats = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6']
+    if (rearSeats.every((s) => isSeatFree(normalized[s], now))) {
+      tryAddSuggestion(rearSeats, 450, 'FAMILY_BLOCK')
+    }
+
     for (let i = 0; i < ALL_SEAT_ROWS.length - 2; i++) {
       const r1 = ALL_SEAT_ROWS[i]
       const r2 = ALL_SEAT_ROWS[i + 1]
@@ -753,6 +881,18 @@ export function suggestSeats(
 
   // Fallback: any free seats that strictly satisfy rules
   if (suggestions.length < 3) {
+    // Check front row
+    const freeFront = ['1', '2', '3', '4'].filter((s) => isSeatFree(normalized[s], now))
+    if (freeFront.length >= nPax) {
+      tryAddSuggestion(freeFront.slice(0, nPax), 160, 'FRESH_ZONE')
+    }
+
+    // Check rear bench
+    const freeRear = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6'].filter((s) => isSeatFree(normalized[s], now))
+    if (freeRear.length >= nPax) {
+      tryAddSuggestion(freeRear.slice(0, nPax), 155, 'FRESH_ZONE')
+    }
+
     for (let i = 0; i < ALL_SEAT_ROWS.length && suggestions.length < 5; i++) {
       const r = ALL_SEAT_ROWS[i]
       const freeInRow = [1, 2, 3, 4, 5]

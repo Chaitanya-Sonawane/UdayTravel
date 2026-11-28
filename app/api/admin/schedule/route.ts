@@ -86,19 +86,22 @@ export async function GET(req: Request) {
         const t = doc.data() as any
         const tId = t.tripId || t.id
         if (t.status !== 'cancelled' && !tripsList.some((existing) => existing.tripId === tId)) {
+          const tplId = t.templateId || (t.totalSeats === 44 ? 'BUS_44' : t.totalSeats === 33 ? 'BUS_33' : 'BUS_55')
+          const defaultCap = tplId === 'BUS_44' ? 44 : tplId === 'BUS_33' ? 33 : 55
+          const totalSeats = t.totalSeats || defaultCap
           tripsList.push({
             tripId: tId,
             busId: t.busId || 'bus_mh16dp4951',
-            busName: t.busName || 'Uday Express',
+            busName: t.busName || 'Uday Bus',
             busNumber: t.busNumber || 'MH 16 DP 4951',
-            templateId: t.templateId || (t.totalSeats === 44 ? 'BUS_44' : t.totalSeats === 33 ? 'BUS_33' : 'BUS_55'),
+            templateId: tplId,
             departureTime: t.departureTime,
             arrivalTime: t.arrivalTime,
             fare: t.fare || 200,
             booked: Array.isArray(t.bookedSeats) ? t.bookedSeats.length : 0,
-            totalSeats: t.totalSeats || 50,
-            totalCapacity: t.totalSeats || 50,
-            seatsLeft: typeof t.availableSeats === 'number' ? t.availableSeats : 50,
+            totalSeats,
+            totalCapacity: totalSeats,
+            seatsLeft: typeof t.availableSeats === 'number' ? t.availableSeats : totalSeats,
             status: t.status || 'active',
           })
         }
@@ -114,19 +117,22 @@ export async function GET(req: Request) {
         repoTrips.forEach((t) => {
           const tId = t.tripId || t.id
           if (t.status !== 'cancelled' && !tripsList.some((existing) => existing.tripId === tId)) {
+            const tplId = (t as any).templateId || (t.totalSeats === 44 ? 'BUS_44' : t.totalSeats === 33 ? 'BUS_33' : 'BUS_55')
+            const defaultCap = tplId === 'BUS_44' ? 44 : tplId === 'BUS_33' ? 33 : 55
+            const totalSeats = t.totalSeats || defaultCap
             tripsList.push({
               tripId: tId,
               busId: t.busId || 'bus_mh16dp4951',
-              busName: t.busName || 'Uday Express',
+              busName: t.busName || 'Uday Bus',
               busNumber: t.busNumber || 'MH 16 DP 4951',
-              templateId: (t as any).templateId || (t.totalSeats === 44 ? 'BUS_44' : t.totalSeats === 33 ? 'BUS_33' : 'BUS_55'),
+              templateId: tplId,
               departureTime: t.departureTime,
               arrivalTime: t.arrivalTime || addMinutesToTime(t.departureTime, 195),
               fare: t.fare || 200,
               booked: Array.isArray(t.bookedSeats) ? t.bookedSeats.length : 0,
-              totalSeats: t.totalSeats || 50,
-              totalCapacity: t.totalSeats || 50,
-              seatsLeft: typeof t.availableSeats === 'number' ? t.availableSeats : 50,
+              totalSeats,
+              totalCapacity: totalSeats,
+              seatsLeft: typeof t.availableSeats === 'number' ? t.availableSeats : totalSeats,
               status: t.status || 'available',
             })
           }

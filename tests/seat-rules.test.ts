@@ -382,8 +382,8 @@ describe('Seat Rules Engine (Pure Domain)', () => {
       )
 
       expect(suggestions.length).toBeGreaterThan(0)
-      // First suggestion should be a window seat in the front (A1 or A5)
-      expect(['A1', 'A5']).toContain(suggestions[0]!.seatIds[0])
+      // First suggestion should be a window seat in the front (1, A1 or A5)
+      expect(['1', 'A1', 'A5']).toContain(suggestions[0]!.seatIds[0])
     })
   })
 })
