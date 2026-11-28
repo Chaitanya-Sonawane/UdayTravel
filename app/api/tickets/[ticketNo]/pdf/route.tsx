@@ -480,7 +480,7 @@ function normalizeTicketData(ticketDoc: TicketDoc | MockTicket | any): Normalize
       to: ticketDoc.route?.to || 'Pune',
     },
     travelDate: ticketDoc.travelDate || '2026-03-22',
-    busName: ticketDoc.busName || 'Uday Express 01',
+    busName: ticketDoc.busName && !ticketDoc.busName.includes('Uday Express') ? ticketDoc.busName : 'Uday Bus',
     busNumber: ticketDoc.busNumber || 'MH 16 DP 4951',
     seatLayout: ticketDoc.seatLayout || '3+2 Seater',
     pickup: {

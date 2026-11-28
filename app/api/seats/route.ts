@@ -57,7 +57,7 @@ export async function GET(req: Request) {
       if (repoTrip) {
         tripData = {
           tripId: repoTrip.tripId || repoTrip.id,
-          busName: repoTrip.busId === 'bus_mh16dp4951' ? 'Uday Express 01' : 'Uday Express',
+          busName: 'Uday Bus',
           busType: '3+2 Seater Coach',
           departureTime: repoTrip.departureTime,
           arrivalTime: repoTrip.arrivalTime || '08:45',
@@ -80,7 +80,7 @@ export async function GET(req: Request) {
       const depTime = `${depHour}:${depMin}`
       tripData = {
         tripId,
-        busName: 'Uday Express',
+        busName: 'Uday Bus',
         busType: '3+2 Seater Coach',
         departureTime: depTime,
         arrivalTime: '09:00',
@@ -164,7 +164,7 @@ export async function GET(req: Request) {
       route,
       date,
       tripId,
-      busName: tripData.busName || 'Uday Express',
+      busName: tripData.busName && !tripData.busName.includes('Uday Express') ? tripData.busName : 'Uday Bus',
       busType: tripData.busType || '3+2 Seater Coach',
       departureTime: tripData.departureTime || '06:00',
       arrivalTime: tripData.arrivalTime || '08:45',

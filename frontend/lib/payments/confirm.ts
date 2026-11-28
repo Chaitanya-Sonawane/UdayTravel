@@ -213,7 +213,7 @@ export async function confirmBooking(
         },
         travelDate: order.travelDate,
         tripId: order.tripId,
-        busName: order.busName || 'Uday Express',
+        busName: order.busName && !order.busName.includes('Uday Express') ? order.busName : 'Uday Bus',
         busNumber,
         seatLayout: '3+2 Seater',
         pickup,

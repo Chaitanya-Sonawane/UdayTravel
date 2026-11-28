@@ -157,7 +157,7 @@ export async function GET(req: Request) {
           seatNo: p.seat,
           tripId: ticket.tripId || `${routeParam}_0600`,
           busNumber: ticket.busNumber || 'MH 16 DP 4951',
-          busName: ticket.busName || 'Uday Express',
+          busName: ticket.busName && !ticket.busName.includes('Uday Express') ? ticket.busName : 'Uday Bus',
           departureTime: ticket.tripId?.includes('_')
             ? ticket.tripId.split('_')[2]?.replace(/(\d{2})(\d{2})/, '$1:$2') || '06:00'
             : '06:00',
@@ -270,7 +270,7 @@ export async function POST(req: Request) {
     // 1. Resolve Trip ID
     let tripId = inputTripId
     let busNumber = isAhmPun ? 'MH 16 DP 4951' : 'MH 16 DV 1003'
-    let busName = isAhmPun ? 'Uday Express 55-Seater' : 'Uday Express 44-Seater'
+    let busName = 'Uday Bus'
     let templateId: BusTemplateId = isAhmPun ? 'BUS_55' : 'BUS_44'
     let departureTime = isAhmPun ? '06:00' : '06:30'
 

@@ -487,7 +487,7 @@ export default function SeatsPage() {
             routeId: route,
             date,
             tripId,
-            busName: data.busName || 'Uday Express',
+            busName: data.busName && !data.busName.includes('Uday Express') ? data.busName : 'Uday Bus',
             departure: data.departureTime || '06:00',
             arrival: data.arrivalTime || '08:45',
             fare: data.fare || 200,

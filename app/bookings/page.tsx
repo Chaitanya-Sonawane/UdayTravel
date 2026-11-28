@@ -444,7 +444,7 @@ export default function BookingsPage() {
                       {t.busNumber || 'MH 16 DP 4951'}
                     </strong>
                     <span className="text-[11px] text-gray-500 block truncate max-w-[130px]">
-                      {t.busName || 'Uday Express 55-Seater'}
+                      {t.busName && !t.busName.includes('Uday Express') ? t.busName : 'Uday Bus'}
                     </span>
                   </div>
                 </div>

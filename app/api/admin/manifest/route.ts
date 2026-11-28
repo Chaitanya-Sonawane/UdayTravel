@@ -91,7 +91,7 @@ export async function GET(req: Request) {
       tripId,
       travelDate: date,
       busNumber: confirmedTickets[0]?.busNumber || 'MH 16 DP 4951',
-      busName: confirmedTickets[0]?.busName || 'Uday Express',
+      busName: confirmedTickets[0]?.busName && !confirmedTickets[0]?.busName.includes('Uday Express') ? confirmedTickets[0]?.busName : 'Uday Bus',
       totalSeats,
       totalBooked,
       boardedCount,

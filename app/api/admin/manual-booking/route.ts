@@ -23,7 +23,7 @@ const ManualBookingRequestSchema = z.object({
   routeId: z.enum(['AHM_PUN', 'PUN_AHM']),
   travelDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
   tripId: z.string().min(1, 'Trip ID is required'),
-  busName: z.string().default('Uday Express'),
+  busName: z.string().default('Uday Bus'),
   busNumber: z.string().default('MH 16 DP 4951'),
   seatLayout: z.string().default('3+2 Seater'),
   pickup: z.object({

@@ -150,7 +150,7 @@ export async function POST(req: Request) {
     const finalRouteId = routeId || 'AHM_PUN'
     const finalTravelDate = travelDate || new Date().toISOString().slice(0, 10)
     const finalTripId = tripId || 'AHM_PUN_0600'
-    let finalBusName = busName || 'Uday Express'
+    let finalBusName = busName && !busName.includes('Uday Express') ? busName : 'Uday Bus'
     let perSeatPaise = 20000 // ₹200 default
 
     if (routeId && travelDate) {

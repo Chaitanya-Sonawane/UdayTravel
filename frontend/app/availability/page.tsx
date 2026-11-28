@@ -131,7 +131,7 @@ function AvailabilityContent() {
                 setBuses(
                   fallbackData.trips.map((t: any) => ({
                     tripId: t.tripId || t.id,
-                    busName: t.busName || 'Uday Express 01',
+                    busName: t.busName || 'Uday Bus',
                     busType: '3+2 Seater Coach',
                     departure: `${date}T${t.departureTime || '06:00'}:00+05:30`,
                     arrival: `${date}T${t.arrivalTime || '08:45'}:00+05:30`,
@@ -650,10 +650,10 @@ function BusCard({
   const [selecting, setSelecting] = useState(false)
   const disabled = bus.status === 'closed' || bus.status === 'sold-out' || bus.seatsLeft <= 0
 
-  const busIndexFormatted = String(index + 1).padStart(2, '0')
-  const formattedTitle = bus.busName?.startsWith('Uday Express')
-    ? bus.busName
-    : `Uday Express ${busIndexFormatted}`
+  const busNumberDisplay =
+    bus.busNumber ||
+    (bus.totalCapacity === 44 ? 'MH 16 DV 1003' : bus.totalCapacity === 33 ? 'MH 16 DP 3951' : 'MH 16 DP 4951')
+  const formattedTitle = 'Uday Bus'
 
   const fromCity = route === 'AHM_PUN' ? 'Nagar' : 'Pune'
   const toCity = route === 'AHM_PUN' ? 'Pune' : 'Nagar'
@@ -681,7 +681,7 @@ function BusCard({
     router.push(
       `/passengers?busId=${bus.tripId}&tripId=${bus.tripId}&date=${date}&route=${route}&busName=${encodeURIComponent(
         formattedTitle
-      )}&departure=${encodeURIComponent(bus.departureTime)}&arrival=${encodeURIComponent(
+      )}&busNumber=${encodeURIComponent(busNumberDisplay)}&departure=${encodeURIComponent(bus.departureTime)}&arrival=${encodeURIComponent(
         bus.arrivalTime
       )}&fare=${bus.fare}&count=${passengerCount}&step=details`
     )
@@ -690,14 +690,19 @@ function BusCard({
   return (
     <article
       className="bg-white rounded-3xl border border-slate-200/90 p-5 sm:p-6 shadow-xs hover:shadow-md transition-all duration-200 font-jakarta"
-      aria-label={`${formattedTitle}, departs ${bus.departureTime}, arrives ${bus.arrivalTime}, ${bus.seatsLeft} seats remaining, ${isAvailable ? 'available' : 'sold out'}`}
+      aria-label={`${formattedTitle} (${busNumberDisplay}), departs ${bus.departureTime}, arrives ${bus.arrivalTime}, ${bus.seatsLeft} seats remaining, ${isAvailable ? 'available' : 'sold out'}`}
     >
-      {/* Top Row: Title + AVAILABLE Pill on Left, Price + 'per seat' on Right */}
+      {/* Top Row: Bus Number in Big Font + Title + AVAILABLE Pill on Left, Price + 'per seat' on Right */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <h2 className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight">
-            {formattedTitle}
-          </h2>
+          <div className="flex items-center gap-2">
+            <span className="text-sm sm:text-base font-black font-mono tracking-wider text-slate-900 bg-amber-100/80 border border-amber-300 px-2.5 py-0.5 rounded-lg shadow-2xs">
+              {busNumberDisplay}
+            </span>
+            <h2 className="font-extrabold text-base sm:text-lg text-slate-900 tracking-tight">
+              {formattedTitle}
+            </h2>
+          </div>
           {isAvailable ? (
             <span className="px-2.5 py-0.5 rounded-full bg-[#F8B018] text-[#0B0F19] text-[10px] sm:text-[11px] font-black tracking-wider uppercase inline-flex items-center shadow-xs">
               AVAILABLE

@@ -446,7 +446,7 @@ export default function PassengersPage() {
         routeId: route,
         tripId,
         busId: tripId,
-        busName: busName || 'Uday Express',
+        busName: busName && !busName.includes('Uday Express') ? busName : 'Uday Bus',
         date,
         departure: searchParams.get('departure') || journey.departure || '06:00',
         arrival: searchParams.get('arrival') || journey.arrival || '08:45',
@@ -667,7 +667,7 @@ export default function PassengersPage() {
         <div className="mb-4 p-4 bg-white border border-slate-200/90 rounded-2xl shadow-2xs flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold text-amber-600 uppercase tracking-wider">
-              <span>{journey.busName || 'Uday Express'}</span>
+              <span>{journey.busName && !journey.busName.includes('Uday Express') ? journey.busName : 'Uday Bus'}</span>
             </div>
             <div className="text-base font-extrabold text-slate-900 mt-0.5 tracking-tight">
               {journey.from || 'Ahilyanagar'} → {journey.to || 'Pune'}

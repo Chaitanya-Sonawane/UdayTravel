@@ -38,6 +38,12 @@ async function fetchCachedAvailabilityDoc(docId: string): Promise<AvailabilityDo
   }
 }
 
+function cleanBusName(name?: string): string {
+  if (!name) return 'Uday Bus'
+  if (name.includes('Uday Express') || name.includes('Seater')) return 'Uday Bus'
+  return name
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const routeParam = searchParams.get('route')
@@ -140,7 +146,7 @@ export async function GET(req: Request) {
 
       tripItems.push({
         tripId,
-        busName: tripData.busName || 'Uday Bus',
+        busName: cleanBusName(tripData.busName),
         busType: coachLabel,
         busNumber,
         coachLabel,
@@ -196,7 +202,7 @@ export async function GET(req: Request) {
 
         tripItems.push({
           tripId: customTrip.tripId,
-          busName: customTrip.busName || 'Uday Bus',
+          busName: cleanBusName(customTrip.busName),
           busType: coachLabel,
           busNumber,
           coachLabel,
@@ -253,7 +259,7 @@ export async function GET(req: Request) {
         const busNumber = t.busNumber || (t.totalSeats === 44 || t.busId === 'bus_mh16dv1003' ? 'MH 16 DV 1003' : t.totalSeats === 33 || t.busId === 'bus_mh16dp3951' ? 'MH 16 DP 3951' : 'MH 16 DP 4951')
         const coachLabel = t.coachLabel || (t.totalSeats === 44 ? '2+2 Coach (44 Seats)' : t.totalSeats === 33 ? '2+2 Coach (33 Seats)' : '2+3 Coach (55 Seats)')
         const layoutType = (t.seatLayout && t.seatLayout.includes('2+3')) || t.totalSeats === 55 ? '2+3' : '2+2'
-        const busName = t.busName || 'Uday Bus'
+        const busName = cleanBusName(t.busName)
 
         tripItems.push({
           tripId: t.tripId || t.id,

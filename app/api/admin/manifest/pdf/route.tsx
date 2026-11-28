@@ -338,7 +338,7 @@ export async function GET(req: Request) {
     passengers.sort((a, b) => a.seatNo.localeCompare(b.seatNo, undefined, { numeric: true }))
 
     const busNumber = confirmedTickets[0]?.busNumber || 'MH 16 DP 4951'
-    const busName = confirmedTickets[0]?.busName || 'Uday Express 55-Seater Coach'
+    const busName = confirmedTickets[0]?.busName && !confirmedTickets[0]?.busName.includes('Uday Express') ? confirmedTickets[0]?.busName : 'Uday Bus'
     const totalCapacity = busNumber.includes('1003') ? 44 : busNumber.includes('3951') ? 33 : 55
     const routeName = confirmedTickets[0]?.route
       ? `${confirmedTickets[0].route.from} -> ${confirmedTickets[0].route.to}`

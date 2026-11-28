@@ -43,6 +43,12 @@ function addMinutesToTime(timeStr: string, minutes: number): string {
   return `${String(finalH).padStart(2, '0')}:${String(finalM).padStart(2, '0')}`
 }
 
+function cleanBusName(name?: string): string {
+  if (!name) return 'Uday Bus'
+  if (name.includes('Uday Express') || name.includes('Seater')) return 'Uday Bus'
+  return name
+}
+
 /**
  * GET /api/admin/schedule?route=AHM_PUN&date=2026-11-20
  * Returns available fleet buses and existing scheduled trips for this route/date
@@ -89,10 +95,11 @@ export async function GET(req: Request) {
           const tplId = t.templateId || (t.totalSeats === 44 ? 'BUS_44' : t.totalSeats === 33 ? 'BUS_33' : 'BUS_55')
           const defaultCap = tplId === 'BUS_44' ? 44 : tplId === 'BUS_33' ? 33 : 55
           const totalSeats = t.totalSeats || defaultCap
+
           tripsList.push({
             tripId: tId,
             busId: t.busId || 'bus_mh16dp4951',
-            busName: t.busName || 'Uday Bus',
+            busName: cleanBusName(t.busName),
             busNumber: t.busNumber || 'MH 16 DP 4951',
             templateId: tplId,
             departureTime: t.departureTime,
@@ -123,7 +130,7 @@ export async function GET(req: Request) {
             tripsList.push({
               tripId: tId,
               busId: t.busId || 'bus_mh16dp4951',
-              busName: t.busName || 'Uday Bus',
+              busName: cleanBusName(t.busName),
               busNumber: t.busNumber || 'MH 16 DP 4951',
               templateId: tplId,
               departureTime: t.departureTime,
