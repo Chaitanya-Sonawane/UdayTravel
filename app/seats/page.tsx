@@ -116,12 +116,14 @@ function formatHumanSeatDate(dateStr: string) {
 }
 
 function BusSeatGraphic({
+  seatId,
   isSelected,
   isOccupied,
   bookedGender,
   isLadiesOnly,
   isGenderBlocked,
 }: {
+  seatId?: string
   isSelected?: boolean
   isOccupied?: boolean
   bookedGender?: 'F' | 'M' | null
@@ -141,6 +143,20 @@ function BusSeatGraphic({
         <line x1="7" y1="31" x2="29" y2="31" stroke="#B45309" strokeWidth="1.8" />
         <rect x="2" y="14" width="6" height="24" rx="2" fill="#F8B018" stroke="#0B0F19" strokeWidth="1.8" />
         <rect x="28" y="14" width="6" height="24" rx="2" fill="#F8B018" stroke="#0B0F19" strokeWidth="1.8" />
+        {seatId && (
+          <text
+            x="18"
+            y="17"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize="10"
+            fontFamily="ui-monospace, monospace"
+            fontWeight="900"
+            fill="#0B0F19"
+          >
+            {seatId}
+          </text>
+        )}
       </svg>
     )
   }
@@ -159,6 +175,20 @@ function BusSeatGraphic({
         <rect x="7" y="31" width="22" height="9" fill="#E879F9" stroke="#A855F7" strokeWidth="1.6" />
         <rect x="2" y="14" width="6" height="26" rx="2" fill="#E879F9" stroke="#A855F7" strokeWidth="1.6" />
         <rect x="28" y="14" width="6" height="26" rx="2" fill="#E879F9" stroke="#A855F7" strokeWidth="1.6" />
+        {seatId && (
+          <text
+            x="18"
+            y="17"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize="10"
+            fontFamily="ui-monospace, monospace"
+            fontWeight="900"
+            fill="#A855F7"
+          >
+            {seatId}
+          </text>
+        )}
       </svg>
     )
   }
@@ -176,6 +206,20 @@ function BusSeatGraphic({
         <line x1="7" y1="31" x2="29" y2="31" stroke="#5A6474" strokeWidth="1.6" />
         <rect x="2" y="14" width="6" height="24" rx="2" fill="#D8DAE0" stroke="#5A6474" strokeWidth="1.6" />
         <rect x="28" y="14" width="6" height="24" rx="2" fill="#D8DAE0" stroke="#5A6474" strokeWidth="1.6" />
+        {seatId && (
+          <text
+            x="18"
+            y="17"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize="10"
+            fontFamily="ui-monospace, monospace"
+            fontWeight="900"
+            fill="#5A6474"
+          >
+            {seatId}
+          </text>
+        )}
       </svg>
     )
   }
@@ -193,6 +237,20 @@ function BusSeatGraphic({
         <line x1="7" y1="31" x2="29" y2="31" stroke="#94A3B8" strokeWidth="1.6" />
         <rect x="2" y="14" width="6" height="24" rx="2" fill="#F1F5F9" stroke="#94A3B8" strokeWidth="1.6" />
         <rect x="28" y="14" width="6" height="24" rx="2" fill="#F1F5F9" stroke="#94A3B8" strokeWidth="1.6" />
+        {seatId && (
+          <text
+            x="18"
+            y="17"
+            textAnchor="middle"
+            dominantBaseline="central"
+            fontSize="10"
+            fontFamily="ui-monospace, monospace"
+            fontWeight="900"
+            fill="#94A3B8"
+          >
+            {seatId}
+          </text>
+        )}
       </svg>
     )
   }
@@ -209,6 +267,20 @@ function BusSeatGraphic({
       <line x1="7" y1="31" x2="29" y2="31" stroke="#5A6474" strokeWidth="1.6" />
       <rect x="2" y="14" width="6" height="24" rx="2" fill="#FFFFFF" stroke="#5A6474" strokeWidth="1.6" />
       <rect x="28" y="14" width="6" height="24" rx="2" fill="#FFFFFF" stroke="#5A6474" strokeWidth="1.6" />
+      {seatId && (
+        <text
+          x="18"
+          y="17"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="10"
+          fontFamily="ui-monospace, monospace"
+          fontWeight="900"
+          fill="#1E293B"
+        >
+          {seatId}
+        </text>
+      )}
     </svg>
   )
 }
@@ -1204,6 +1276,7 @@ export default function SeatsPage() {
         aria-pressed={isSelected}
       >
         <BusSeatGraphic
+          seatId={seatId}
           isSelected={isSelected}
           isOccupied={Boolean(isOccupied)}
           bookedGender={bookedGender}
@@ -1368,42 +1441,59 @@ export default function SeatsPage() {
             </div>
           </div>
 
-          {/* Bus Fleet Bar */}
-          <div className="flex items-center justify-end flex-wrap gap-2 pt-2 border-t border-gray-100">
-            <div className="flex items-center gap-2">
-              {loadingPublicMap && (
-                <span className="flex items-center gap-1.5 text-[11px] text-[#F8B018] font-bold">
-                  <Loader2 size={12} className="animate-spin text-[#F8B018]" /> Loading seats...
-                </span>
-              )}
-              <span className="text-[11px] font-bold text-gray-500 font-mono">
-                {busTemplate.busNumber}
-              </span>
+          {/* Prominent Dark Bus Registration Pill matching PDF */}
+          <div className="bg-[#0F172A] text-center py-3.5 px-6 rounded-2xl shadow-md mb-4 max-w-[380px] mx-auto">
+            <div className="text-2xl sm:text-3xl font-black text-[#FACC15] tracking-wider font-mono">
+              {busTemplate.busNumber}
             </div>
+            <div className="text-xs sm:text-sm font-semibold text-white/90 mt-0.5">
+              {`${busTemplate.capacity} seats`}
+            </div>
+            {loadingPublicMap && (
+              <div className="flex items-center justify-center gap-1.5 text-[10px] text-[#F8B018] font-bold mt-1">
+                <Loader2 size={11} className="animate-spin text-[#F8B018]" />
+                <span>Syncing live seat map...</span>
+              </div>
+            )}
           </div>
 
-          {/* Coach Cabin Container matching screenshot structure */}
+          {/* Coach Cabin Container matching PDF structure */}
           <div className="flow-bus-shell flow-seat-map" role="group" aria-label="Choose bus seats">
-            {/* Driver Cabin with Steering Wheel at top right */}
-            <div className="flow-driver-cabin">
-              <span className="text-[10px] font-extrabold text-gray-400 tracking-wider uppercase font-mono">
-                Front · Driver Cabin
+            {/* Front of Bus Header matching PDF */}
+            <div className="flex items-center justify-between pb-3 mb-3 border-b-2 border-slate-200">
+              <span className="text-xs sm:text-sm font-bold text-slate-600">
+                Entrance
               </span>
-              <div className="flow-steering-wheel" title="Driver's Side">
-                <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
-                  <circle cx="16" cy="16" r="13" stroke="#9CA3AF" strokeWidth="2.5" />
-                  <circle cx="16" cy="16" r="3.5" fill="#9CA3AF" />
-                  <line x1="16" y1="3" x2="16" y2="12.5" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" />
-                  <line x1="6.8" y1="21.3" x2="13.5" y2="17.8" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" />
-                  <line x1="25.2" y1="21.3" x2="18.5" y2="17.8" stroke="#9CA3AF" strokeWidth="2.5" strokeLinecap="round" />
+              <span className="text-xs sm:text-sm font-black text-slate-700 uppercase tracking-wider font-mono">
+                FRONT OF BUS
+              </span>
+              <div
+                className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-500 shadow-2xs"
+                title="Driver's Steering Wheel"
+              >
+                <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+                  <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
+                  <circle cx="16" cy="16" r="3.5" fill="currentColor" />
+                  <line x1="16" y1="3" x2="16" y2="12.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  <line x1="6.8" y1="21.3" x2="13.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                  <line x1="25.2" y1="21.3" x2="18.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
                 </svg>
               </div>
             </div>
 
-            {/* Front entrance seats if template has frontSeats (e.g. 44-seater) */}
-            {busTemplate.frontSeats && busTemplate.frontSeats.length > 0 && (
-              <div className="flow-seat-row-front mb-2 pb-2 border-b border-gray-100 flex justify-end gap-1.5">
-                {busTemplate.frontSeats.map((sId) => renderSeatButton(sId))}
+            {/* Front Row (Seat 1 on left, Seats 2, 3, 4 or 2, 3 on right) matching PDF */}
+            {busTemplate.frontRow && (
+              <div className="flow-seat-row mb-2">
+                <div className="flow-seat-col-left">
+                  {busTemplate.frontRow.leftSeats.map((sId) => renderSeatButton(sId))}
+                  {busTemplate.frontRow.leftSeats.length < 2 && (
+                    <div className="w-[34px] h-[40px] invisible pointer-events-none" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="flow-seat-aisle" aria-hidden="true" />
+                <div className="flow-seat-col-right">
+                  {busTemplate.frontRow.rightSeats.map((sId) => renderSeatButton(sId))}
+                </div>
               </div>
             )}
 
@@ -1428,6 +1518,13 @@ export default function SeatsPage() {
                 {busTemplate.rearBench.map((sId) => renderSeatButton(sId))}
               </div>
             )}
+
+            {/* Back of Bus Footer matching PDF */}
+            <div className="pt-3 mt-3 border-t-2 border-slate-200 text-center">
+              <span className="text-xs sm:text-sm font-black text-slate-700 uppercase tracking-wider font-mono">
+                BACK OF BUS
+              </span>
+            </div>
           </div>
 
           {/* Rules Legend */}

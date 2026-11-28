@@ -1375,38 +1375,58 @@ export function ManualCounterBooking({
           )}
         </div>
 
+        {/* Prominent Dark Bus Registration Pill matching PDF */}
+        <div className="bg-[#0F172A] text-center py-3.5 px-6 rounded-2xl shadow-md max-w-[420px] mx-auto">
+          <div className="text-2xl sm:text-3xl font-black text-[#FACC15] tracking-wider font-mono">
+            {template.busNumber}
+          </div>
+          <div className="text-xs sm:text-sm font-semibold text-white/90 mt-0.5">
+            {`${template.capacity} seats`}
+          </div>
+        </div>
+
         {/* The Realistic Bus Coach Hull */}
         <div className="flow-bus-shell flow-seat-map max-w-[420px] mx-auto bg-white rounded-[28px] border-2 border-slate-300 p-5 shadow-sm space-y-4 relative">
-          {/* Driver Cabin & Entrance */}
-          <div className="flow-driver-cabin flex justify-between items-center pb-3 border-b-2 border-dashed border-slate-200">
-            <div className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Front Entrance &rarr;</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider">
-                Driver Cabin
-              </span>
-              <div
-                className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-500 shadow-2xs"
-                title="Driver's Steering Wheel"
-              >
-                <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-                  <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
-                  <circle cx="16" cy="16" r="3.5" fill="currentColor" />
-                  <line x1="16" y1="3" x2="16" y2="12.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  <line x1="6.8" y1="21.3" x2="13.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                  <line x1="25.2" y1="21.3" x2="18.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-                </svg>
-              </div>
+          {/* Front of Bus Header matching PDF */}
+          <div className="flex items-center justify-between pb-3 border-b-2 border-slate-200 text-xs">
+            <span className="text-xs sm:text-sm font-bold text-slate-600">
+              Entrance
+            </span>
+            <span className="text-xs sm:text-sm font-black text-slate-700 uppercase tracking-wider font-mono">
+              FRONT OF BUS
+            </span>
+            <div
+              className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-500 shadow-2xs"
+              title="Driver's Steering Wheel"
+            >
+              <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
+                <circle cx="16" cy="16" r="13" stroke="currentColor" strokeWidth="2.5" />
+                <circle cx="16" cy="16" r="3.5" fill="currentColor" />
+                <line x1="16" y1="3" x2="16" y2="12.5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                <line x1="6.8" y1="21.3" x2="13.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+                <line x1="25.2" y1="21.3" x2="18.5" y2="17.8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+              </svg>
             </div>
           </div>
 
-          {/* Front Cabin Seats */}
-          {template.frontSeats && template.frontSeats.length > 0 && (
-            <div className="flex items-center justify-end gap-1.5 pb-2.5 border-b border-slate-100">
-              <span className="text-[10px] font-mono font-bold text-slate-400 uppercase mr-1">Front Cabin:</span>
-              {template.frontSeats.map((sId) => renderSeat(sId))}
+          {/* Front Row (Seat 1 on left, Seats 2, 3, 4 or 2, 3 on right) matching PDF */}
+          {template.frontRow && (
+            <div className="flex items-center justify-between gap-1 sm:gap-2 pb-2">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                {template.frontRow.leftSeats.map((sId) => renderSeat(sId))}
+                {template.frontRow.leftSeats.length < 2 && (
+                  <div className="w-[36px] h-[42px] invisible pointer-events-none" aria-hidden="true" />
+                )}
+              </div>
+              <div className="flex-1 flex items-center justify-center px-1">
+                <div className="h-9 w-6 flex items-center justify-center relative">
+                  <span className="text-[10px] font-mono font-bold text-slate-300 select-none">FR</span>
+                  <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 border-r border-dashed border-slate-200" />
+                </div>
+              </div>
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                {template.frontRow.rightSeats.map((sId) => renderSeat(sId))}
+              </div>
             </div>
           )}
 
@@ -1448,6 +1468,13 @@ export function ManualCounterBooking({
               </div>
             </div>
           )}
+
+          {/* Back of Bus Footer matching PDF */}
+          <div className="pt-3 border-t-2 border-slate-200 text-center">
+            <span className="text-xs sm:text-sm font-black text-slate-700 uppercase tracking-wider font-mono">
+              BACK OF BUS
+            </span>
+          </div>
 
           {/* Rules Legend matching frontend exactly */}
           <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-center gap-3 text-[11px] font-bold text-slate-500">

@@ -13,12 +13,18 @@ export interface BusSeatRow {
   rightSeats: string[]
 }
 
+export interface FrontRowLayout {
+  leftSeats: string[]
+  rightSeats: string[]
+}
+
 export interface BusLayoutTemplate {
   id: BusTemplateId
   name: string
   busNumber: string
   capacity: number
   layoutType: '2+3' | '2+2'
+  frontRow?: FrontRowLayout
   frontSeats: string[]
   rows: BusSeatRow[]
   rearBench: string[]
@@ -38,7 +44,11 @@ const rows55: BusSeatRow[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].map((
   rightSeats: [`${row}3`, `${row}4`, `${row}5`],
 }))
 
-const front55: string[] = [] // Front cabin 1 2 3 4 removed per specification
+const front55Row: FrontRowLayout = {
+  leftSeats: ['1'],
+  rightSeats: ['2', '3', '4'],
+}
+const front55: string[] = ['1', '2', '3', '4']
 const rear55 = ['J1', 'J2', 'J3', 'J4', 'J5', 'J6'] // 6-seat rear bench
 
 const allSeats55 = [
@@ -53,13 +63,15 @@ export const BUS_55_TEMPLATE: BusLayoutTemplate = {
   busNumber: 'MH 16 DP 4951',
   capacity: 55,
   layoutType: '2+3',
+  frontRow: front55Row,
   frontSeats: front55,
   rows: rows55,
   rearBench: rear55,
   allSeatIds: allSeats55,
   zoneOf: (seatId: string) => {
     if (rear55.includes(seatId)) return 'ZONE_REAR_BENCH'
-    if (front55.includes(seatId)) return 'ZONE_FRONT_CABIN'
+    if (seatId === '1') return 'ZONE_FRONT_LEFT'
+    if (['2', '3', '4'].includes(seatId)) return 'ZONE_FRONT_RIGHT'
     const row = seatId[0]
     const col = Number(seatId.slice(1))
     return col <= 2 ? `${row}-L` : `${row}-R`
@@ -72,6 +84,11 @@ export const BUS_55_TEMPLATE: BusLayoutTemplate = {
       if (idx < rear55.length - 1 && rear55[idx + 1]) res.push(rear55[idx + 1]!)
       return res
     }
+    if (seatId === '1') return []
+    if (seatId === '2') return ['3']
+    if (seatId === '3') return ['2', '4']
+    if (seatId === '4') return ['3']
+
     const row = seatId[0]
     const col = Number(seatId.slice(1))
     if (col === 1) return [`${row}2`]
@@ -92,7 +109,11 @@ const rows44: BusSeatRow[] = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].map((
   rightSeats: [`${row}3`, `${row}4`],
 }))
 
-const front44 = ['1', '2', '3'] // Front entrance seats
+const front44Row: FrontRowLayout = {
+  leftSeats: ['1'],
+  rightSeats: ['2', '3'],
+}
+const front44 = ['1', '2', '3'] // Front entrance seats: 1 on left, 2, 3 on right
 const rear44 = ['J1', 'J2', 'J3', 'J4', 'J5'] // 5-seat rear bench
 
 const allSeats44 = [
@@ -107,13 +128,15 @@ export const BUS_44_TEMPLATE: BusLayoutTemplate = {
   busNumber: 'MH 16 DV 1003',
   capacity: 44,
   layoutType: '2+2',
+  frontRow: front44Row,
   frontSeats: front44,
   rows: rows44,
   rearBench: rear44,
   allSeatIds: allSeats44,
   zoneOf: (seatId: string) => {
     if (rear44.includes(seatId)) return 'ZONE_REAR_BENCH'
-    if (front44.includes(seatId)) return 'ZONE_FRONT_CABIN'
+    if (seatId === '1') return 'ZONE_FRONT_LEFT'
+    if (['2', '3'].includes(seatId)) return 'ZONE_FRONT_RIGHT'
     const row = seatId[0]
     const col = Number(seatId.slice(1))
     return col <= 2 ? `${row}-L` : `${row}-R`
@@ -126,6 +149,10 @@ export const BUS_44_TEMPLATE: BusLayoutTemplate = {
       if (idx < rear44.length - 1 && rear44[idx + 1]) res.push(rear44[idx + 1]!)
       return res
     }
+    if (seatId === '1') return []
+    if (seatId === '2') return ['3']
+    if (seatId === '3') return ['2']
+
     const row = seatId[0]
     const col = Number(seatId.slice(1))
     if (col === 1) return [`${row}2`]
@@ -145,7 +172,7 @@ const rows33: BusSeatRow[] = [
   { rowLabel: 'R3', leftSeats: ['9', '10'], rightSeats: ['11', '12'] },
   { rowLabel: 'R4', leftSeats: ['16', '15'], rightSeats: ['14', '13'] },
   { rowLabel: 'R5', leftSeats: ['17', '18'], rightSeats: ['19', '20'] },
-  { rowLabel: 'R6', leftSeats: ['21', '23'], rightSeats: ['22', '24'] },
+  { rowLabel: 'R6', leftSeats: ['24', '23'], rightSeats: ['22', '21'] },
   { rowLabel: 'R7', leftSeats: ['25', '26'], rightSeats: ['27', '28'] },
 ]
 

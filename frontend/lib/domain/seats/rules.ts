@@ -91,6 +91,8 @@ export function normalizeSeats(
  * Returns zone ID: <row>-L (seats 1, 2) or <row>-R (seats 3, 4, 5).
  */
 export function zoneOf(seatId: string): string {
+  if (seatId === '1') return 'FRONT-L'
+  if (seatId === '2' || seatId === '3' || seatId === '4') return 'FRONT-R'
   const row = seatId.charAt(0)
   const col = seatId.slice(1)
   if (col === '1' || col === '2') {
@@ -103,6 +105,8 @@ export function zoneOf(seatId: string): string {
  * Returns seats in a given zone.
  */
 export function seatsInZone(zoneId: string): string[] {
+  if (zoneId === 'FRONT-L') return ['1']
+  if (zoneId === 'FRONT-R') return ['2', '3', '4']
   const [row, side] = zoneId.split('-')
   if (side === 'L') {
     return [`${row}1`, `${row}2`]
@@ -114,6 +118,7 @@ export function seatsInZone(zoneId: string): string[] {
  * Checks whether a seat is on the 3-seat side (columns 3, 4, 5 in 2+3 layout).
  */
 export function isThreeSeatSide(seatId: string): boolean {
+  if (seatId === '2' || seatId === '3' || seatId === '4') return true
   const col = seatId.slice(1)
   return col === '3' || col === '4' || col === '5'
 }
@@ -122,6 +127,7 @@ export function isThreeSeatSide(seatId: string): boolean {
  * Returns all three seats belonging to the same 3-seat bench in a row (e.g. ['A3', 'A4', 'A5']).
  */
 export function threeSeatBenchOf(seatId: string): string[] {
+  if (seatId === '2' || seatId === '3' || seatId === '4') return ['2', '3', '4']
   const row = seatId.charAt(0)
   return [`${row}3`, `${row}4`, `${row}5`]
 }
@@ -132,6 +138,10 @@ export function threeSeatBenchOf(seatId: string): string[] {
  * In Right zone: 3 <-> 4 <-> 5 (3 and 5 are not directly adjacent)
  */
 export function neighbours(seatId: string): string[] {
+  if (seatId === '1') return []
+  if (seatId === '2') return ['3']
+  if (seatId === '3') return ['2', '4']
+  if (seatId === '4') return ['3']
   const row = seatId.charAt(0)
   const col = seatId.slice(1)
   switch (col) {
